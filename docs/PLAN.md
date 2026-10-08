@@ -205,12 +205,12 @@ Success: mocked pytest passes. One live `POST /api/chat` as `user`, message `Add
 
 ## Part 10: AI sidebar
 
-- [ ] Add a sidebar on the board page. The user can type a message and see the thread. History is component state and starts empty on each full page load
-- [ ] Submit calls `POST /api/chat` with the message and the current history. Append the user message immediately, then append the reply
-- [ ] When the response includes a board, replace the board on screen with it. When `board` is `null`, leave the board as it is
-- [ ] Show a pending state while the request is in flight, and show the error text when the request fails
-- [ ] Match the existing board styling. Navy headings, blue for the chat panel accent, purple for send
-- [ ] Vitest with mocked `fetch`: a reply renders; a response with a board renames or adds what the JSON says; a response with `board: null` does not change the cards; a failed request shows the error and keeps the board
+- [x] Add a sidebar on the board page. The user can type a message and see the thread. History is component state and starts empty on each full page load
+- [x] Submit calls `POST /api/chat` with the message and the current history. Append the user message immediately, then append the reply
+- [x] When the response includes a board, replace the board on screen with it. When `board` is `null`, leave the board as it is
+- [x] Show a pending state while the request is in flight, and show the error text when the request fails
+- [x] Match the existing board styling. Navy headings, blue for the chat panel accent, purple for send
+- [x] Vitest with mocked `fetch`: a reply renders; a response with a board renames or adds what the JSON says; a response with `board: null` does not change the cards; a failed request shows the error and keeps the board
 
 Tests: vitest. Then, in the browser against the container, sign in and ask the model to rename a column. The column title changes without a manual reload.
 

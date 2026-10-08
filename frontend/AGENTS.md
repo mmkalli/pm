@@ -48,6 +48,7 @@ Defined in `src/lib/kanban.ts`.
 - Each column can add a card (title required, details optional). Empty details become `No details yet.`
 - Each card has Edit and Remove. Edit turns title and details into fields; Save persists; Cancel restores.
 - Load or save failures show an error and keep the last saved board.
+- An Assistant sidebar on the board sends `POST /api/chat` with the message and the in-memory thread. The thread starts empty on each full page load. A returned board replaces the one on screen. `board: null` leaves the cards. A failed request shows an error and keeps the board.
 - Columns cannot be added or removed.
 - Colors are CSS variables in `src/app/globals.css`: yellow `#ecad0a`, blue `#209dd7`, purple `#753991`, navy `#032147`, gray `#888888`.
 - Fonts: Space Grotesk for headings, Manrope for body, via `next/font`.
@@ -57,13 +58,14 @@ Defined in `src/lib/kanban.ts`.
 - `src/components/App.tsx` — login gate and logout
 - `src/components/App.test.tsx` — logged out form, logged in board, logout
 - `src/components/KanbanBoard.tsx` — board state and drag context
+- `src/components/ChatSidebar.tsx` — assistant thread and send
 - `src/components/KanbanColumn.tsx` — column, droppable area, add form
 - `src/components/KanbanCard.tsx` — sortable card, edit, and delete
 - `src/components/KanbanCardPreview.tsx` — drag overlay
 - `src/components/NewCardForm.tsx` — add-card form
 - `src/lib/kanban.ts` — types, seed data, `moveCard`
 - `src/lib/kanban.test.ts` — `moveCard` unit tests
-- `src/components/KanbanBoard.test.tsx` — load from API, persist add, failed PUT
+- `src/components/KanbanBoard.test.tsx` — load, persist, failed save, chat reply, board update, chat error
 - `tests/kanban.spec.ts` — login, logout, load, add, persist, drag against `http://127.0.0.1:8000`
 
 `next.config.ts` uses `output: "export"`. Docker builds `frontend/out` and FastAPI serves it at `/`.
