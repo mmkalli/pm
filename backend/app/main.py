@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.ai import QUESTION, complete
+from app.ai import chat
 from app.board import valid_board
 from app.db import get_board, init_db, save_board
 
@@ -31,6 +31,16 @@ app.add_middleware(
 class LoginBody(BaseModel):
     username: str
     password: str
+
+
+class HistoryItem(BaseModel):
+    role: str
+    content: str
+
+
+class ChatBody(BaseModel):
+    message: str
+    history: list[HistoryItem]
 
 
 def current_username(request: Request) -> str:
@@ -77,10 +87,18 @@ def write_board(body: dict, request: Request) -> dict:
     return save_board(username, body)
 
 
-@app.post("/api/ai/ping")
-def ai_ping(request: Request) -> dict[str, str]:
-    current_username(request)
-    return {"reply": complete(QUESTION)}
+@app.post("/api/chat")
+def post_chat(body: ChatBody, request: Request) -> dict:
+    username = current_username(request)
+    reply, returned = chat(
+        get_board(username),
+        [item.model_dump() for item in body.history],
+        body.message,
+    )
+    if isinstance(returned, dict) and valid_board(returned):
+        save_board(username, returned)
+        return {"reply": reply, "board": returned}
+    return {"reply": reply, "board": None}
 
 
 static_dir = Path(

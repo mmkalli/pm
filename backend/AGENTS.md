@@ -20,9 +20,9 @@ Tests set `DATABASE_PATH` to a temp file. They do not use the Docker volume.
 | GET | `/api/me` | session cookie |
 | GET | `/api/board` | session cookie |
 | PUT | `/api/board` | session cookie; invalid board is 400 |
-| POST | `/api/ai/ping` | session cookie; test route, calls OpenRouter |
+| POST | `/api/chat` | session cookie |
 
-`POST /api/ai/ping` asks the model `What is 2+2? Reply with only the number.` and returns `{ "reply": "<model text>" }`. The key is `OPENROUTER_API_KEY`. `uv run pytest` mocks that call. `LIVE_AI=1 uv run pytest tests/test_ai.py::test_live_ping_reply_contains_4` calls the running container.
+`POST /api/chat` body is `{ "message", "history" }`. History is not stored. The model is `nvidia/nemotron-3-ultra-550b-a55b:free` with `OPENROUTER_API_KEY`. A valid returned board is saved. An invalid board or `"board": null` leaves the stored board unchanged and the response `board` is `null`. `uv run pytest` mocks OpenRouter. `LIVE_AI=1 uv run pytest tests/test_ai.py::test_live_chat_adds_plan_check_to_backlog` calls the running container.
 
 Static Next.js export is mounted at `/` after these routes.
 

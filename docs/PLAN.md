@@ -187,10 +187,10 @@ Success: the live reply contains `4`.
 
 ## Part 9: Structured board updates
 
-- [ ] `POST /api/chat` loads the user's board, calls the model with that JSON, the client history, and the message, and requests this structured shape: `{ "reply": string, "board": BoardData or null }`
-- [ ] Save a valid returned board. Drop an invalid one and respond with `"board": null`
-- [ ] Do not write chat history to SQLite
-- [ ] Remove `POST /api/ai/ping` once `POST /api/chat` covers connectivity. Keep the mocked model-id test on the chat call
+- [x] `POST /api/chat` loads the user's board, calls the model with that JSON, the client history, and the message, and requests this structured shape: `{ "reply": string, "board": BoardData or null }`
+- [x] Save a valid returned board. Drop an invalid one and respond with `"board": null`
+- [x] Do not write chat history to SQLite
+- [x] Remove `POST /api/ai/ping` once `POST /api/chat` covers connectivity. Keep the mocked model-id test on the chat call
 
 Tests, with OpenRouter mocked:
 
