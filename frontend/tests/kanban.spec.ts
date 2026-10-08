@@ -48,6 +48,41 @@ test("adds a card to a column", async ({ page }) => {
   await expect(firstColumn.getByText("Playwright card")).toBeVisible();
 });
 
+test("persists a new card after reload", async ({ page }) => {
+  await signIn(page);
+  const firstColumn = page.locator('[data-testid^="column-"]').first();
+  await firstColumn.getByRole("button", { name: /add a card/i }).click();
+  await firstColumn.getByPlaceholder("Card title").fill("Persisted card");
+  await firstColumn.getByPlaceholder("Details").fill("Stays after reload.");
+  const addSave = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/board") && response.request().method() === "PUT"
+  );
+  await firstColumn.getByRole("button", { name: /add card/i }).click();
+  await addSave;
+  await expect(firstColumn.getByText("Persisted card")).toBeVisible();
+  await page.reload();
+  await expect(page.locator('[data-testid^="column-"]')).toHaveCount(5);
+  await expect(page.getByText("Persisted card")).toBeVisible();
+});
+
+test("persists a renamed column after reload", async ({ page }) => {
+  await signIn(page);
+  const title = page.getByTestId("column-col-discovery").getByLabel("Column title");
+  await title.fill("Research");
+  const renameSave = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/board") && response.request().method() === "PUT"
+  );
+  await title.blur();
+  await renameSave;
+  await expect(title).toHaveValue("Research");
+  await page.reload();
+  await expect(
+    page.getByTestId("column-col-discovery").getByLabel("Column title")
+  ).toHaveValue("Research");
+});
+
 test("moves a card between columns", async ({ page }) => {
   await signIn(page);
   const card = page.getByTestId("card-card-1");

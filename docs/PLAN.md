@@ -163,12 +163,12 @@ Success: pytest passes. The running container still serves the in-memory fronten
 
 ## Part 7: Frontend + Backend
 
-- [ ] After login, load the board with `GET /api/board` instead of `initialData`
-- [ ] After rename, add, delete, drag, and card edit, `PUT /api/board` with the whole board
-- [ ] Add card edit. An Edit control on the card turns title and details into fields. Save sends the `PUT`. Cancel restores the previous text. Title is required
-- [ ] On load or save failure, show the error and keep the last board on screen
-- [ ] Vitest mocks `fetch`: load renders the server board; each mutation sends the updated board; a failed `PUT` leaves the previous board and shows the error
-- [ ] Playwright against the container: log in, add a card, reload, and see that card. Rename a column, reload, and see the new name
+- [x] After login, load the board with `GET /api/board` instead of `initialData`
+- [x] After rename, add, delete, drag, and card edit, `PUT /api/board` with the whole board
+- [x] Add card edit. An Edit control on the card turns title and details into fields. Save sends the `PUT`. Cancel restores the previous text. Title is required
+- [x] On load or save failure, show the error and keep the last board on screen
+- [x] Vitest mocks `fetch`: load renders the server board; each mutation sends the updated board; a failed `PUT` leaves the previous board and shows the error
+- [x] Playwright against the container: log in, add a card, reload, and see that card. Rename a column, reload, and see the new name
 
 Tests: vitest, pytest, Playwright persistence flow.
 

@@ -1,6 +1,32 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "@/components/App";
+import { initialData } from "@/lib/kanban";
+
+const jsonResponse = (status: number, body: unknown) =>
+  Promise.resolve({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  });
+
+const mockAppFetch = () => {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/api/me")) {
+      return jsonResponse(200, { username: "user" });
+    }
+    if (url.includes("/api/board")) {
+      return jsonResponse(200, initialData);
+    }
+    if (url.includes("/api/logout")) {
+      return jsonResponse(200, { ok: true });
+    }
+    return jsonResponse(401, {});
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+};
 
 describe("App", () => {
   afterEach(() => {
@@ -23,32 +49,13 @@ describe("App", () => {
   });
 
   it("shows the board when /api/me returns a user", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({ username: "user" }),
-      })
-    );
+    mockAppFetch();
     render(<App />);
     expect(await screen.findAllByTestId(/column-/i)).toHaveLength(5);
   });
 
   it("returns to the form after logout", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ username: "user" }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ ok: true }),
-      });
-    vi.stubGlobal("fetch", fetchMock);
+    mockAppFetch();
     render(<App />);
     await screen.findAllByTestId(/column-/i);
     await userEvent.click(screen.getByRole("button", { name: /log out/i }));

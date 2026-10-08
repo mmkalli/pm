@@ -41,13 +41,13 @@ Defined in `src/lib/kanban.ts`.
 
 ## UI behavior
 
-`src/app/page.tsx` renders `App`. On load it calls `GET /api/me`. A 401 shows the login form (`user` / `password`). A session shows `KanbanBoard`. Log out calls `POST /api/logout`. Board state is still in memory.
+`src/app/page.tsx` renders `App`. On load it calls `GET /api/me`. A 401 shows the login form (`user` / `password`). A session shows `KanbanBoard`, which loads `GET /api/board` and saves with `PUT /api/board`. Log out calls `POST /api/logout`.
 
-- Column titles are inputs and rename in memory.
+- Column titles rename locally, then persist on blur.
 - Cards drag within and across columns. A pointer must move 6px before a drag starts.
 - Each column can add a card (title required, details optional). Empty details become `No details yet.`
-- Each card has a Remove button.
-- Existing card title and details are not editable.
+- Each card has Edit and Remove. Edit turns title and details into fields; Save persists; Cancel restores.
+- Load or save failures show an error and keep the last saved board.
 - Columns cannot be added or removed.
 - Colors are CSS variables in `src/app/globals.css`: yellow `#ecad0a`, blue `#209dd7`, purple `#753991`, navy `#032147`, gray `#888888`.
 - Fonts: Space Grotesk for headings, Manrope for body, via `next/font`.
@@ -58,12 +58,12 @@ Defined in `src/lib/kanban.ts`.
 - `src/components/App.test.tsx` — logged out form, logged in board, logout
 - `src/components/KanbanBoard.tsx` — board state and drag context
 - `src/components/KanbanColumn.tsx` — column, droppable area, add form
-- `src/components/KanbanCard.tsx` — sortable card and delete
+- `src/components/KanbanCard.tsx` — sortable card, edit, and delete
 - `src/components/KanbanCardPreview.tsx` — drag overlay
 - `src/components/NewCardForm.tsx` — add-card form
 - `src/lib/kanban.ts` — types, seed data, `moveCard`
 - `src/lib/kanban.test.ts` — `moveCard` unit tests
-- `src/components/KanbanBoard.test.tsx` — render, rename, add, delete
-- `tests/kanban.spec.ts` — login, logout, load, add card, drag card to Review against `http://127.0.0.1:8000`
+- `src/components/KanbanBoard.test.tsx` — load from API, persist add, failed PUT
+- `tests/kanban.spec.ts` — login, logout, load, add, persist, drag against `http://127.0.0.1:8000`
 
-`next.config.ts` uses `output: "export"`. Docker builds `frontend/out` and FastAPI serves it at `/`. The board still runs in memory until later parts wire the API.
+`next.config.ts` uses `output: "export"`. Docker builds `frontend/out` and FastAPI serves it at `/`.
