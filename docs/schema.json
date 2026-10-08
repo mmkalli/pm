@@ -1,0 +1,11 @@
+{
+  "users": {
+    "id": "integer primary key",
+    "username": "text unique not null",
+    "password": "text not null"
+  },
+  "boards": {
+    "user_id": "integer primary key references users(id)",
+    "data": "text not null"
+  }
+}

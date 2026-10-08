@@ -116,7 +116,7 @@ Success: opening `/` shows the login form. `user` / `password` shows the demo bo
 
 ## Part 5: Database modeling
 
-Write `docs/schema.json` and `docs/database.md` with this schema. No migration framework. Create the tables in Python on startup when the file is missing.
+- [x] Write `docs/schema.json` and `docs/database.md` with this schema. No migration framework. Create the tables in Python on startup when the file is missing.
 
 ```json
 {
@@ -143,11 +143,11 @@ Success: both docs exist and match the JSON above.
 
 ## Part 6: Backend
 
-- [ ] On startup, create `/data/pm.sqlite3` and the tables if they are missing, then insert the seed user and seed board if that user is missing
-- [ ] `GET /api/board` returns the signed-in user's board. `PUT /api/board` replaces it when the body is valid
-- [ ] Reject an invalid board with `400` and leave the stored board unchanged
-- [ ] Update `backend/AGENTS.md` to describe the app, the routes, and the database file
-- [ ] Tests use a temporary database file, not the Docker volume
+- [x] On startup, create `/data/pm.sqlite3` and the tables if they are missing, then insert the seed user and seed board if that user is missing
+- [x] `GET /api/board` returns the signed-in user's board. `PUT /api/board` replaces it when the body is valid
+- [x] Reject an invalid board with `400` and leave the stored board unchanged
+- [x] Update `backend/AGENTS.md` to describe the app, the routes, and the database file
+- [x] Tests use a temporary database file, not the Docker volume
 
 Tests, each as its own pytest:
 

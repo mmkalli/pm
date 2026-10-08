@@ -11,6 +11,7 @@ WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 ENV STATIC_DIR=/app/static
+ENV DATABASE_PATH=/data/pm.sqlite3
 
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-dev
