@@ -176,10 +176,10 @@ Success: refresh keeps the board. A second browser session for the same user see
 
 ## Part 8: AI connectivity
 
-- [ ] Add a backend function that calls OpenRouter chat completions for model `nvidia/nemotron-3-ultra-550b-a55b:free`, with the key from the environment
-- [ ] Add a test-only route `POST /api/ai/ping` that asks `What is 2+2? Reply with only the number.` and returns `{ "reply": "<model text>" }`. Require a session
-- [ ] Unit test the function with a mocked HTTP call and assert the model id and the question were sent
-- [ ] One live test calls OpenRouter and asserts the reply contains `4`
+- [x] Add a backend function that calls OpenRouter chat completions for model `nvidia/nemotron-3-ultra-550b-a55b:free`, with the key from the environment
+- [x] Add a test-only route `POST /api/ai/ping` that asks `What is 2+2? Reply with only the number.` and returns `{ "reply": "<model text>" }`. Require a session
+- [x] Unit test the function with a mocked HTTP call and assert the model id and the question were sent
+- [x] One live test calls OpenRouter and asserts the reply contains `4`
 
 Tests: mocked pytest always. Live pytest against the running container with `.env` loaded.
 

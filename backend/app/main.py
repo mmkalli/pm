@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 
+from app.ai import QUESTION, complete
 from app.board import valid_board
 from app.db import get_board, init_db, save_board
 
@@ -74,6 +75,12 @@ def write_board(body: dict, request: Request) -> dict:
     if not valid_board(body):
         raise HTTPException(status_code=400)
     return save_board(username, body)
+
+
+@app.post("/api/ai/ping")
+def ai_ping(request: Request) -> dict[str, str]:
+    current_username(request)
+    return {"reply": complete(QUESTION)}
 
 
 static_dir = Path(
