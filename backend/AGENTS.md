@@ -6,35 +6,44 @@ FastAPI app in `app/main.py`. Uvicorn in Docker on `0.0.0.0:8000`. Package manag
 
 ```bash
 uv run pytest
+uv run pytest --cov --cov-report=term-missing
 ```
 
-Tests set `DATABASE_PATH` to a temp file. They do not use the Docker volume. `tests/test_health.py` reads `frontend/out`, so run `npm run build` in `frontend/` first. If `uv` is not on `PATH`, use `.venv/Scripts/python.exe -m pytest` (Windows) or `.venv/bin/python -m pytest`.
+Tests set `DATABASE_PATH` to a temp file and lower the PBKDF2 iterations (`tests/conftest.py`). Fixtures: `client` (no session), `user_client` (signed in as the seed admin `user`). `tests/test_health.py` reads `frontend/out`, so run `npm run build` in `frontend/` first. If `uv` is not on `PATH`, use `.venv/Scripts/python.exe -m pytest` (Windows) or `.venv/bin/python -m pytest`. Keep line coverage of `app/` at 100%.
 
 ## Routes
+
+The full contract is in `docs/PLAN.md` (Phase 2 API).
 
 | Method | Path | Auth |
 | --- | --- | --- |
 | GET | `/api/health` | no |
-| POST | `/api/login` | no (checked against `users`) |
-| POST | `/api/logout` | no |
-| GET | `/api/me` | session cookie |
-| GET | `/api/board` | session cookie |
-| PUT | `/api/board` | session cookie; invalid board is 400 |
-| POST | `/api/chat` | session cookie |
+| POST | `/api/register`, `/api/login`, `/api/logout` | no |
+| GET, DELETE | `/api/me` | session |
+| PUT | `/api/me/password` | session |
+| GET, POST | `/api/boards` | session |
+| GET, PATCH, DELETE | `/api/boards/{id}` | session, owner |
+| PUT | `/api/boards/{id}/data` | session, owner; invalid board is 400 |
+| POST | `/api/boards/{id}/chat` | session, owner |
+| GET, POST | `/api/users` | admin |
+| PATCH, DELETE | `/api/users/{id}` | admin |
 
-`POST /api/chat` body is `{ "message", "history" }`. History roles must be `user` or `assistant` (otherwise `422`). History is not stored. The model is `nvidia/nemotron-3-ultra-550b-a55b:free` with `OPENROUTER_API_KEY`. OpenRouter is tried up to 3 times, 1 second apart, on HTTP errors or a response with no `choices`. A valid returned board is saved. An invalid board or `"board": null` leaves the stored board unchanged and the response `board` is `null`. `uv run pytest` mocks OpenRouter. `LIVE_AI=1 uv run pytest tests/test_ai.py::test_live_chat_adds_plan_check_to_backlog` calls the running container.
+The session stores `user_id`. `current_user` reloads the user on each request, so a deleted user's session gets `401`. A board that does not belong to the user is `404`.
+
+`POST /api/boards/{id}/chat` body is `{ "message", "history" }`. History roles must be `user` or `assistant` (otherwise `422`). History is not stored. The model is `nvidia/nemotron-3-ultra-550b-a55b:free` with `OPENROUTER_API_KEY`. OpenRouter is tried up to 3 times, 1 second apart, on HTTP errors or a response with no `choices`; after that, or when the model output is not the expected JSON, the route returns `502`. A valid returned board is saved. An invalid board or `"board": null` leaves the stored board unchanged and the response `board` is `null`. `uv run pytest` mocks OpenRouter. `LIVE_AI=1 uv run pytest tests/test_ai.py::test_live_chat_adds_plan_check_to_backlog` calls the running container.
 
 Static Next.js export is mounted at `/` after these routes.
 
-Session cookie name is `session` (Starlette `SessionMiddleware`, `same_site=lax`, not `https_only`).
+Session cookie name is `session` (Starlette `SessionMiddleware`, `same_site=lax`, not `https_only`). The signing key is `SESSION_SECRET` from the environment, with a local default.
 
 ## Database
 
-SQLite at `DATABASE_PATH`, default `/data/pm.sqlite3`. Created and seeded on startup if missing. Schema is `docs/schema.json`. Seed user is `user` / `password` with the demo board from `app/board.py`.
+See `docs/database.md`. Seed user is `user` / `password` (admin) with the `Product Roadmap` demo board from `app/board.py`.
 
 ## Files
 
-- `app/main.py` — routes and session
+- `app/main.py` — routes, request models, session and admin dependencies
 - `app/ai.py` — OpenRouter chat completion
-- `app/db.py` — sqlite init, user check, get, save
-- `app/board.py` — seed board JSON and validation
+- `app/auth.py` — PBKDF2 password hashing
+- `app/db.py` — schema, MVP migration, seed, user and board queries
+- `app/board.py` — seed board, empty board, validation

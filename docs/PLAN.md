@@ -216,3 +216,68 @@ Success: mocked pytest passes. One live `POST /api/chat` as `user`, message `Add
 Tests: vitest. Then, in the browser against the container, sign in and ask the model to rename a column. The column title changes without a manual reload.
 
 Success: a chat that changes the board updates the columns and cards on screen, and a reload shows the same board. A chat that only answers a question leaves the cards where they were. Refresh clears the chat transcript and keeps the board.
+
+---
+
+# Phase 2: Full project management app
+
+Goal: grow the MVP into a multi-user, multi-board project management app. Parts 1-10 above describe the MVP; where Phase 2 changes a locked decision, Phase 2 wins.
+
+## Phase 2 decisions
+
+- Users can register. Passwords are stored as salted PBKDF2-SHA256 hashes (stdlib `hashlib`), never plaintext. The seed account `user` / `password` is an admin.
+- The session stores the user id. Every authenticated request reloads the user, so a deleted user's session is rejected with `401`.
+- Admins manage users: list, create, reset password, grant or revoke admin, delete. An admin cannot delete or demote themself.
+- Each user owns any number of boards. A board has an id, a name, the board JSON, and timestamps. Another user's board is `404`.
+- Columns are no longer fixed. A board has 1 to 12 columns with unique non-empty ids and non-empty titles. Users can add, rename, reorder, and remove empty columns. New boards start with the five default columns and no cards.
+- Cards gain optional `priority` (`low`, `medium`, `high`), `dueDate` (`YYYY-MM-DD`), and `labels` (list of non-empty strings).
+- An existing MVP database is migrated on startup (`PRAGMA user_version`): plaintext passwords are hashed, and each user's single board becomes a board named `My Board`.
+- The AI chat works per board: `POST /api/boards/{id}/chat`.
+
+## Phase 2 API
+
+| Method | Path | Auth | Body | Success |
+| --- | --- | --- | --- | --- |
+| POST | `/api/register` | no | `{ "username", "password" }` | `201`, session cookie, `{ "id", "username", "isAdmin" }` |
+| POST | `/api/login` | no | `{ "username", "password" }` | `{ "id", "username", "isAdmin" }` |
+| POST | `/api/logout` | no | | `{ "ok": true }` |
+| GET | `/api/me` | yes | | `{ "id", "username", "isAdmin" }` |
+| PUT | `/api/me/password` | yes | `{ "currentPassword", "newPassword" }` | `{ "ok": true }` |
+| DELETE | `/api/me` | yes | `{ "password" }` | `204`, session cleared |
+| GET | `/api/boards` | yes | | `[{ "id", "name", "cardCount", "createdAt", "updatedAt" }]` |
+| POST | `/api/boards` | yes | `{ "name" }` | `201`, board summary |
+| GET | `/api/boards/{id}` | yes | | `{ "id", "name", "createdAt", "updatedAt", "data": BoardData }` |
+| PATCH | `/api/boards/{id}` | yes | `{ "name" }` | board summary |
+| PUT | `/api/boards/{id}/data` | yes | `BoardData` | saved `BoardData` |
+| DELETE | `/api/boards/{id}` | yes | | `204` |
+| POST | `/api/boards/{id}/chat` | yes | `{ "message", "history" }` | `{ "reply", "board" }` |
+| GET | `/api/users` | admin | | `[{ "id", "username", "isAdmin", "boardCount", "createdAt" }]` |
+| POST | `/api/users` | admin | `{ "username", "password", "isAdmin" }` | `201`, user |
+| PATCH | `/api/users/{id}` | admin | `{ "password"?, "isAdmin"? }` | user |
+| DELETE | `/api/users/{id}` | admin | | `204` |
+
+Usernames are 3-32 characters of letters, digits, `.`, `_`, `-`. Passwords are at least 8 characters. Invalid bodies are `422`, a taken username is `409`, a wrong current password is `403`, a non-admin on an admin route is `403`, and an admin acting on themself (delete or demote) is `400`.
+
+## Part 11: Backend users and boards
+
+- [x] Password hashing and schema v1 with migration from the MVP database
+- [x] Register, login, me, change password, delete account
+- [x] Admin user management routes
+- [x] Board CRUD routes and per-board chat; remove `/api/board` and `/api/chat`
+- [x] Flexible column validation and card `priority`, `dueDate`, `labels`
+- [x] pytest for every route, the migration, and validation rules; update `docs/schema.json`, `docs/database.md`, `backend/AGENTS.md`
+
+Success: pytest passes with coverage above 95% for `backend/app`.
+
+## Part 12: Frontend users and boards
+
+- [ ] Sign-in and register views
+- [ ] Board list sidebar: switch, create, rename, delete boards
+- [ ] Add, rename, move left and right, and remove empty columns
+- [ ] Card priority, due date, and labels: edit and display
+- [ ] Search and filter cards on the board by text, priority, and label
+- [ ] Account view: change password, delete account
+- [ ] Admin view: list, create, reset password, toggle admin, delete users
+- [ ] Vitest for each view; update Playwright specs and add multi-board, register, and admin flows; update `frontend/AGENTS.md`
+
+Success: vitest, lint, and Playwright pass against the container.

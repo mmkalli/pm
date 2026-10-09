@@ -1,10 +1,7 @@
-COLUMN_IDS = [
-    "col-backlog",
-    "col-discovery",
-    "col-progress",
-    "col-review",
-    "col-done",
-]
+from datetime import date
+
+MAX_COLUMNS = 12
+PRIORITIES = {"low", "medium", "high"}
 
 INITIAL_BOARD = {
     "columns": [
@@ -59,6 +56,47 @@ INITIAL_BOARD = {
 }
 
 
+def empty_board() -> dict:
+    return {
+        "columns": [
+            {"id": column["id"], "title": column["title"], "cardIds": []}
+            for column in INITIAL_BOARD["columns"]
+        ],
+        "cards": {},
+    }
+
+
+def non_empty_text(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def valid_date(value: object) -> bool:
+    if not isinstance(value, str) or len(value) != 10:
+        return False
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
+def valid_card(card: object, card_id: str) -> bool:
+    if not isinstance(card, dict) or card.get("id") != card_id:
+        return False
+    if not non_empty_text(card.get("title")):
+        return False
+    if not isinstance(card.get("details", ""), str):
+        return False
+    priority = card.get("priority")
+    if priority is not None and priority not in PRIORITIES:
+        return False
+    due = card.get("dueDate")
+    if due is not None and not valid_date(due):
+        return False
+    labels = card.get("labels", [])
+    return isinstance(labels, list) and all(non_empty_text(label) for label in labels)
+
+
 def valid_board(data: object) -> bool:
     if not isinstance(data, dict):
         return False
@@ -66,30 +104,24 @@ def valid_board(data: object) -> bool:
     cards = data.get("cards")
     if not isinstance(columns, list) or not isinstance(cards, dict):
         return False
+    if not 1 <= len(columns) <= MAX_COLUMNS:
+        return False
     if not all(isinstance(column, dict) for column in columns):
         return False
-    if [column.get("id") for column in columns] != COLUMN_IDS:
+    column_ids = [column.get("id") for column in columns]
+    if not all(non_empty_text(column_id) for column_id in column_ids):
+        return False
+    if len(set(column_ids)) != len(column_ids):
         return False
     seen: set[str] = set()
     for column in columns:
-        title = column.get("title")
         card_ids = column.get("cardIds")
-        if not isinstance(title, str) or not title.strip():
-            return False
-        if not isinstance(card_ids, list):
+        if not non_empty_text(column.get("title")) or not isinstance(card_ids, list):
             return False
         for card_id in card_ids:
             if not isinstance(card_id, str) or card_id in seen:
                 return False
             seen.add(card_id)
-            card = cards.get(card_id)
-            if not isinstance(card, dict):
-                return False
-            if card.get("id") != card_id:
-                return False
-            card_title = card.get("title")
-            if not isinstance(card_title, str) or not card_title.strip():
-                return False
-            if not isinstance(card.get("details", ""), str):
+            if not valid_card(cards.get(card_id), card_id):
                 return False
     return seen == set(cards)

@@ -3,6 +3,7 @@ import os
 import time
 import urllib.error
 import urllib.request
+from datetime import date
 
 MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
 URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -17,10 +18,14 @@ def chat(board: dict, history: list[dict], message: str) -> tuple[str, object]:
                 "You edit a Kanban board. Respond with JSON only, no markdown, "
                 'in this shape: {"reply": string, "board": BoardData or null}. '
                 "Set board to the full board when you create, edit, move, or remove "
-                "cards, or rename columns. Set board to null when you do not change "
-                "the board. Keep exactly these column ids in this order: "
-                "col-backlog, col-discovery, col-progress, col-review, col-done. "
-                "Each card id appears in only one column. Card titles are non-empty.\n"
+                "cards, or add, rename, reorder, or remove columns. Set board to null "
+                "when you do not change the board. A board has 1 to 12 columns, each "
+                "with a unique id, a non-empty title, and cardIds. Keep existing ids. "
+                "Each card id appears in exactly one column and matches its key in "
+                "cards. A card has a non-empty title, details text, and optional "
+                'priority ("low", "medium", or "high"), dueDate ("YYYY-MM-DD"), and '
+                "labels (list of non-empty strings). "
+                f"Today is {date.today().isoformat()}.\n"
                 "Current board:\n" + json.dumps(board)
             ),
         },
