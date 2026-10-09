@@ -1,4 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
+import { initialData } from "../src/lib/kanban";
+
+test.beforeEach(async ({ request }) => {
+  await request.post("/api/login", {
+    data: { username: "user", password: "password" },
+  });
+  const reset = await request.put("/api/board", { data: initialData });
+  expect(reset.ok()).toBe(true);
+});
 
 const signIn = async (page: Page) => {
   await page.goto("/");

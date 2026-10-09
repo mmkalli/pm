@@ -1,6 +1,6 @@
 # Frontend
 
-Client-only Next.js demo of one Kanban board. State lives in React memory and is lost on refresh. There is no sign-in, API, or AI chat.
+Client-only Next.js app for one Kanban board, statically exported and served by FastAPI. It signs in, loads and saves the board through `/api/*`, and has an AI chat sidebar.
 
 ## Stack
 
@@ -8,7 +8,7 @@ Client-only Next.js demo of one Kanban board. State lives in React memory and is
 - Tailwind CSS 4
 - `@dnd-kit/core` and `@dnd-kit/sortable` for drag and drop
 - Vitest + Testing Library for unit tests
-- Playwright for end-to-end tests against `next dev` on port 3000
+- Playwright (Edge channel) for end-to-end tests against the running container at `http://127.0.0.1:8000`
 
 ## Run and test
 
