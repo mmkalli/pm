@@ -1,7 +1,12 @@
+export type Priority = "low" | "medium" | "high";
+
 export type Card = {
   id: string;
   title: string;
   details: string;
+  priority?: Priority | null;
+  dueDate?: string | null;
+  labels?: string[];
 };
 
 export type Column = {
@@ -165,4 +170,85 @@ export const createId = (prefix: string) => {
   const randomPart = Math.random().toString(36).slice(2, 8);
   const timePart = Date.now().toString(36);
   return `${prefix}-${randomPart}${timePart}`;
+};
+
+export const MAX_COLUMNS = 12;
+export const PRIORITIES: Priority[] = ["high", "medium", "low"];
+
+export const addColumn = (board: BoardData, title: string): BoardData => ({
+  ...board,
+  columns: [...board.columns, { id: createId("col"), title, cardIds: [] }],
+});
+
+export const removeColumn = (board: BoardData, columnId: string): BoardData => ({
+  ...board,
+  columns: board.columns.filter((column) => column.id !== columnId),
+});
+
+export const shiftColumn = (
+  board: BoardData,
+  columnId: string,
+  offset: -1 | 1
+): BoardData => {
+  const index = board.columns.findIndex((column) => column.id === columnId);
+  const target = index + offset;
+  if (index === -1 || target < 0 || target >= board.columns.length) {
+    return board;
+  }
+  const columns = [...board.columns];
+  [columns[index], columns[target]] = [columns[target], columns[index]];
+  return { ...board, columns };
+};
+
+export const parseLabels = (text: string) => [
+  ...new Set(
+    text
+      .split(",")
+      .map((label) => label.trim())
+      .filter(Boolean)
+  ),
+];
+
+export const boardLabels = (board: BoardData) =>
+  [...new Set(Object.values(board.cards).flatMap((card) => card.labels ?? []))].sort();
+
+export const todayIso = () => new Date().toLocaleDateString("en-CA");
+
+export const isOverdue = (card: Card, today: string) =>
+  Boolean(card.dueDate && card.dueDate < today);
+
+export type CardFilter = {
+  text: string;
+  priority: Priority | "";
+  label: string;
+};
+
+export const emptyFilter: CardFilter = { text: "", priority: "", label: "" };
+
+export const isFiltering = (filter: CardFilter) =>
+  Boolean(filter.text.trim() || filter.priority || filter.label);
+
+export const cardMatches = (card: Card, filter: CardFilter) => {
+  const text = filter.text.trim().toLowerCase();
+  if (
+    text &&
+    !`${card.title}\n${card.details}\n${(card.labels ?? []).join("\n")}`
+      .toLowerCase()
+      .includes(text)
+  ) {
+    return false;
+  }
+  if (filter.priority && card.priority !== filter.priority) {
+    return false;
+  }
+  return !filter.label || (card.labels ?? []).includes(filter.label);
+};
+
+export const boardStats = (board: BoardData, today: string) => {
+  const cards = Object.values(board.cards);
+  return {
+    total: cards.length,
+    overdue: cards.filter((card) => isOverdue(card, today)).length,
+    high: cards.filter((card) => card.priority === "high").length,
+  };
 };

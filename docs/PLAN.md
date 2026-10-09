@@ -271,13 +271,13 @@ Success: pytest passes with coverage above 95% for `backend/app`.
 
 ## Part 12: Frontend users and boards
 
-- [ ] Sign-in and register views
-- [ ] Board list sidebar: switch, create, rename, delete boards
-- [ ] Add, rename, move left and right, and remove empty columns
-- [ ] Card priority, due date, and labels: edit and display
-- [ ] Search and filter cards on the board by text, priority, and label
-- [ ] Account view: change password, delete account
-- [ ] Admin view: list, create, reset password, toggle admin, delete users
-- [ ] Vitest for each view; update Playwright specs and add multi-board, register, and admin flows; update `frontend/AGENTS.md`
+- [x] Sign-in and register views
+- [x] Board list sidebar: switch, create, rename, delete boards
+- [x] Add, rename, move left and right, and remove empty columns
+- [x] Card priority, due date, and labels: edit and display
+- [x] Search and filter cards on the board by text, priority, and label
+- [x] Account view: change password, delete account
+- [x] Admin view: list, create, reset password, toggle admin, delete users
+- [x] Vitest for each view; update Playwright specs and add multi-board, register, and admin flows; update `frontend/AGENTS.md`
 
 Success: vitest, lint, and Playwright pass against the container.

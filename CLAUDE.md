@@ -24,6 +24,7 @@ Backend (from `backend/`, Python 3.14, `uv`):
 
 ```bash
 uv run pytest
+uv run pytest --cov --cov-report=term-missing
 uv run pytest tests/test_board.py::test_name
 LIVE_AI=1 uv run pytest tests/test_ai.py::test_live_chat_adds_plan_check_to_backlog   # hits the running container and real OpenRouter
 ```
@@ -34,20 +35,21 @@ Frontend (from `frontend/`):
 
 ```bash
 npm run test:unit                                  # Vitest, jsdom
+npm run test:coverage                              # Vitest with v8 coverage
 npx vitest run src/lib/kanban.test.ts -t "name"    # single unit test
 npm run test:e2e                                   # Playwright
 npm run lint
 npm run build                                      # static export to frontend/out
 ```
 
-Playwright runs against `http://127.0.0.1:8000` using the installed Microsoft Edge (`channel: "msedge"`). The Docker container must be running. Each test resets the stored board to `initialData`, so a run wipes the local board.
+Playwright runs against `http://127.0.0.1:8000` using the installed Microsoft Edge (`channel: "msedge"`). The Docker container must be running. Each test registers a throwaway user and deletes it afterwards; `tests/admin.spec.ts` signs in as `user` / `password`.
 
 ## Architecture
 
-One Docker image: Node stage builds the Next.js static export (`output: "export"`), then a `uv` Python stage runs FastAPI with uvicorn and serves that export at `/`. API routes in `backend/app/main.py` are registered before the static mount. There is no Next.js server at runtime, so the frontend is client-only and talks to `/api/*` with the session cookie.
+One Docker image: Node stage builds the Next.js static export (`output: "export"`), then a `uv` Python stage runs FastAPI with uvicorn and serves that export at `/`. API routes in `backend/app/main.py` are registered before the static mount. There is no Next.js server at runtime, so the frontend is client-only and talks to `/api/*` with the session cookie. The full API contract is the Phase 2 API table in `docs/PLAN.md`.
 
-The single shared data shape is `BoardData` from `frontend/src/lib/kanban.ts` (`columns` with `cardIds`, plus `cards` keyed by id). It is used unchanged by the API, stored as JSON in SQLite (`boards.data`, one row per user), and sent to and returned from the AI. Validation lives in `backend/app/board.py` (`valid_board`): exactly the five fixed column ids in order, non-empty titles, every card referenced exactly once. The seed board is duplicated in `backend/app/board.py`; keep it in sync with `initialData`. Columns are never added or removed.
+The shared data shape is `BoardData` from `frontend/src/lib/kanban.ts` (`columns` with `cardIds`, plus `cards` keyed by id, with optional card `priority`, `dueDate`, `labels`). It is used unchanged by the API, stored as JSON in SQLite (`boards.data`, many boards per user), and sent to and returned from the AI. Validation lives in `backend/app/board.py` (`valid_board`): 1 to 12 columns with unique ids and non-empty titles, every card referenced exactly once, valid optional card fields. The demo board is duplicated in `backend/app/board.py`; keep it in sync with `initialData`.
 
-AI chat (`backend/app/ai.py`): `POST /api/chat` sends the current board, the client-held history, and the new message to OpenRouter (`nvidia/nemotron-3-ultra-550b-a55b:free`, JSON response format, stdlib `urllib`). The model returns `{ "reply", "board" }`. A valid board is saved and returned; an invalid or null board leaves storage unchanged and the response `board` is `null`. History lives only in React state. While a chat request is pending, `KanbanBoard` locks drag, add, edit, delete, and rename so the AI's board cannot overwrite a manual edit.
+AI chat (`backend/app/ai.py`): `POST /api/boards/{id}/chat` sends that board, the client-held history, and the new message to OpenRouter (`nvidia/nemotron-3-ultra-550b-a55b:free`, JSON response format, stdlib `urllib`). The model returns `{ "reply", "board" }`. A valid board is saved and returned; an invalid or null board leaves storage unchanged and the response `board` is `null`. Model failures are `502`. History lives only in React state. While a chat request is pending, `KanbanBoard` locks all board editing so the AI's board cannot overwrite a manual edit.
 
-Login checks the `users` table (seeded with `user` / `password`); the session uses Starlette `SessionMiddleware` (cookie `session`). SQLite lives at `DATABASE_PATH` (default `/data/pm.sqlite3` on the `pm-data` volume) and is created and seeded on startup if missing. Schema: `docs/schema.json`, notes: `docs/database.md`.
+Users: passwords are PBKDF2 hashes (`backend/app/auth.py`); the session (Starlette `SessionMiddleware`, cookie `session`) stores the user id, and `current_user` reloads the user on every request. Admin routes (`/api/users`) use the `admin_user` dependency. A board owned by someone else is `404`. SQLite lives at `DATABASE_PATH` (default `/data/pm.sqlite3` on the `pm-data` volume); on startup `init_db` creates tables, migrates an MVP database, and seeds admin `user` / `password` when there are no users. Schema: `docs/schema.json`, notes: `docs/database.md`.
