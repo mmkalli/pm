@@ -8,7 +8,7 @@ Client-only Next.js app for one Kanban board, statically exported and served by 
 - Tailwind CSS 4
 - `@dnd-kit/core` and `@dnd-kit/sortable` for drag and drop
 - Vitest + Testing Library for unit tests
-- Playwright (Edge channel) for end-to-end tests against the running container at `http://127.0.0.1:8000`
+- Playwright (Microsoft Edge channel) for end-to-end tests against the running container at `http://127.0.0.1:8000`. Each test resets the stored board to `initialData`
 
 ## Run and test
 
@@ -43,12 +43,12 @@ Defined in `src/lib/kanban.ts`.
 
 `src/app/page.tsx` renders `App`. On load it calls `GET /api/me`. A 401 shows the login form (`user` / `password`). A session shows `KanbanBoard`, which loads `GET /api/board` and saves with `PUT /api/board`. Log out calls `POST /api/logout`.
 
-- Column titles rename locally, then persist on blur.
+- Column titles rename locally, then persist on blur. An empty title restores the saved one; an unchanged title sends nothing.
 - Cards drag within and across columns. A pointer must move 6px before a drag starts.
 - Each column can add a card (title required, details optional). Empty details become `No details yet.`
-- Each card has Edit and Remove. Edit turns title and details into fields; Save persists; Cancel restores.
-- Load or save failures show an error and keep the last saved board.
-- An Assistant sidebar on the board sends `POST /api/chat` with the message and the in-memory thread. The thread starts empty on each full page load. A returned board replaces the one on screen. `board: null` leaves the cards. A failed request shows an error and keeps the board.
+- Each card has Edit and Remove. Edit turns title and details into fields; Save persists (empty details become `No details yet.`); Cancel restores.
+- Load or save failures, including an unreachable server, show an error and keep the last saved board. If `/api/me` cannot be reached the login form shows.
+- An Assistant sidebar on the board sends `POST /api/chat` with the message and the in-memory thread. The thread starts empty on each full page load. A returned board replaces the one on screen. `board: null` leaves the cards. A failed request shows an error and keeps the board. While a request is pending, drag, add, edit, delete, and rename are disabled.
 - Columns cannot be added or removed.
 - Colors are CSS variables in `src/app/globals.css`: yellow `#ecad0a`, blue `#209dd7`, purple `#753991`, navy `#032147`, gray `#888888`.
 - Fonts: Space Grotesk for headings, Manrope for body, via `next/font`.

@@ -48,6 +48,17 @@ describe("App", () => {
     expect(screen.queryByTestId(/column-/i)).not.toBeInTheDocument();
   });
 
+  it("shows the login form and a login error when the server is unreachable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    render(<App />);
+    await userEvent.type(await screen.findByLabelText(/username/i), "user");
+    await userEvent.type(screen.getByLabelText(/password/i), "password");
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not reach the server."
+    );
+  });
+
   it("shows the board when /api/me returns a user", async () => {
     mockAppFetch();
     render(<App />);

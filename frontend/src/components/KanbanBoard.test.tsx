@@ -23,6 +23,7 @@ const jsonResponse = (status: number, body: unknown) =>
 
 const mockBoardApi = (options?: {
   putOk?: boolean;
+  putRejects?: boolean;
   board?: BoardData;
   chat?: { reply: string; board: BoardData | null };
   chatStatus?: number;
@@ -43,6 +44,9 @@ const mockBoardApi = (options?: {
       return jsonResponse(200, options?.chat ?? { reply: "ok", board: null });
     }
     if (url.includes("/api/board") && method === "PUT") {
+      if (options?.putRejects) {
+        throw new TypeError("Failed to fetch");
+      }
       if (!putOk) {
         return jsonResponse(500, {});
       }
@@ -210,5 +214,88 @@ describe("KanbanBoard", () => {
     release();
     await pendingClick;
     expect(await screen.findByText("Reply ready")).toBeInTheDocument();
+  });
+
+  it("locks the board while chat is in flight", async () => {
+    let release: () => void = () => {};
+    const chatGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    mockBoardApi({ chat: { reply: "All set", board: null }, chatGate });
+    render(<KanbanBoard />);
+    await screen.findByText("Server card");
+    await userEvent.type(screen.getByRole("textbox", { name: /message/i }), "Hello");
+    const pendingClick = userEvent.click(screen.getByRole("button", { name: /send/i }));
+    await screen.findByText("Sending...");
+    for (const button of screen.getAllByRole("button", { name: /add a card/i })) {
+      expect(button).toBeDisabled();
+    }
+    expect(screen.getByRole("button", { name: "Edit Server card" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete Server card" })).toBeDisabled();
+    for (const input of screen.getAllByLabelText("Column title")) {
+      expect(input).toBeDisabled();
+    }
+    release();
+    await pendingClick;
+    await screen.findByText("All set");
+    expect(screen.getByRole("button", { name: "Edit Server card" })).toBeEnabled();
+  });
+
+  it("restores the title and skips the PUT when a column is renamed to empty", async () => {
+    const fetchMock = mockBoardApi();
+    render(<KanbanBoard />);
+    await screen.findByText("Server card");
+    const title = screen.getByDisplayValue("Backlog");
+    await userEvent.clear(title);
+    await userEvent.tab();
+    expect(title).toHaveValue("Backlog");
+    expect(putBodies(fetchMock)).toHaveLength(0);
+  });
+
+  it("skips the PUT when a column title is unchanged", async () => {
+    const fetchMock = mockBoardApi();
+    render(<KanbanBoard />);
+    await screen.findByText("Server card");
+    await userEvent.click(screen.getByDisplayValue("Backlog"));
+    await userEvent.tab();
+    expect(putBodies(fetchMock)).toHaveLength(0);
+  });
+
+  it("keeps the previous board when the PUT cannot reach the server", async () => {
+    mockBoardApi({ putRejects: true });
+    render(<KanbanBoard />);
+    const column = await screen.findByTestId("column-col-backlog");
+    await userEvent.click(
+      within(column).getByRole("button", { name: /add a card/i })
+    );
+    await userEvent.type(
+      within(column).getByPlaceholderText(/card title/i),
+      "Offline card"
+    );
+    await userEvent.click(
+      within(column).getByRole("button", { name: /add card/i })
+    );
+    expect(await screen.findByText("Could not save the board.")).toBeInTheDocument();
+    expect(within(column).queryByText("Offline card")).not.toBeInTheDocument();
+  });
+
+  it("shows an error when the board cannot be loaded", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    render(<KanbanBoard />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not load the board."
+    );
+  });
+
+  it("stores the placeholder when card details are cleared", async () => {
+    const fetchMock = mockBoardApi();
+    render(<KanbanBoard />);
+    await screen.findByText("Server card");
+    await userEvent.click(screen.getByRole("button", { name: "Edit Server card" }));
+    await userEvent.clear(screen.getByLabelText("Card details"));
+    await userEvent.click(screen.getByRole("button", { name: /save/i }));
+    await waitFor(() => expect(putBodies(fetchMock)).toHaveLength(1));
+    const body = putBodies(fetchMock)[0] as BoardData;
+    expect(body.cards["card-1"].details).toBe("No details yet.");
   });
 });

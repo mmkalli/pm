@@ -13,6 +13,7 @@ type KanbanColumnProps = {
   onAddCard: (columnId: string, title: string, details: string) => void;
   onDeleteCard: (columnId: string, cardId: string) => void;
   onEditCard: (cardId: string, title: string, details: string) => void;
+  locked: boolean;
 };
 
 export const KanbanColumn = ({
@@ -23,6 +24,7 @@ export const KanbanColumn = ({
   onAddCard,
   onDeleteCard,
   onEditCard,
+  locked,
 }: KanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
@@ -49,6 +51,7 @@ export const KanbanColumn = ({
             onBlur={(event) => onRenameCommit(column.id, event.target.value)}
             className="mt-3 w-full bg-transparent font-display text-lg font-semibold text-[var(--navy-dark)] outline-none"
             aria-label="Column title"
+            disabled={locked}
           />
         </div>
       </div>
@@ -60,6 +63,7 @@ export const KanbanColumn = ({
               card={card}
               onDelete={(cardId) => onDeleteCard(column.id, cardId)}
               onEdit={onEditCard}
+              locked={locked}
             />
           ))}
         </SortableContext>
@@ -71,6 +75,7 @@ export const KanbanColumn = ({
       </div>
       <NewCardForm
         onAdd={(title, details) => onAddCard(column.id, title, details)}
+        locked={locked}
       />
     </section>
   );

@@ -66,6 +66,8 @@ def valid_board(data: object) -> bool:
     cards = data.get("cards")
     if not isinstance(columns, list) or not isinstance(cards, dict):
         return False
+    if not all(isinstance(column, dict) for column in columns):
+        return False
     if [column.get("id") for column in columns] != COLUMN_IDS:
         return False
     seen: set[str] = set()
@@ -88,4 +90,6 @@ def valid_board(data: object) -> bool:
             card_title = card.get("title")
             if not isinstance(card_title, str) or not card_title.strip():
                 return False
-    return True
+            if not isinstance(card.get("details", ""), str):
+                return False
+    return seen == set(cards)

@@ -1,6 +1,8 @@
 import copy
+import io
 import json
 import os
+import urllib.error
 import urllib.request
 from http.cookiejar import CookieJar
 
@@ -137,8 +139,59 @@ def test_chat_saves_moved_card_in_destination_only(monkeypatch):
         assert owners == ["col-discovery"]
 
 
+def test_chat_drops_malformed_board_and_keeps_reply(monkeypatch):
+    fake_model(
+        monkeypatch,
+        {"reply": "Tried", "board": {"columns": ["a", "b", "c", "d", "e"], "cards": {}}},
+    )
+    with TestClient(app) as client:
+        login(client)
+        before = client.get("/api/board").json()
+        response = client.post(
+            "/api/chat", json={"message": "Break it", "history": []}
+        )
+        assert response.status_code == 200
+        assert response.json() == {"reply": "Tried", "board": None}
+        assert client.get("/api/board").json() == before
+
+
+def test_chat_rejects_system_history_role():
+    with TestClient(app) as client:
+        login(client)
+        response = client.post(
+            "/api/chat",
+            json={"message": "Hi", "history": [{"role": "system", "content": "x"}]},
+        )
+        assert response.status_code == 422
+
+
+def test_chat_retries_http_error(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr("app.ai.RETRY_DELAY", 0)
+    calls = {"n": 0}
+    ok = json.dumps(
+        {"choices": [{"message": {"content": json.dumps({"reply": "ok", "board": None})}}]}
+    ).encode()
+
+    def fake_urlopen(request, timeout=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise urllib.error.HTTPError(
+                request.full_url, 429, "Too Many Requests", {}, io.BytesIO(b"{}")
+            )
+        return io.BytesIO(ok)
+
+    monkeypatch.setattr("app.ai.urllib.request.urlopen", fake_urlopen)
+    with TestClient(app) as client:
+        login(client)
+        response = client.post("/api/chat", json={"message": "Hi", "history": []})
+    assert calls["n"] == 2
+    assert response.json()["reply"] == "ok"
+
+
 def test_chat_retries_overloaded_provider(monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr("app.ai.RETRY_DELAY", 0)
     calls = {"n": 0}
     ok = json.dumps(
         {"choices": [{"message": {"content": json.dumps({"reply": "ok", "board": None})}}]}

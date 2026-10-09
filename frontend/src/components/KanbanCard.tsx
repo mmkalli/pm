@@ -8,14 +8,15 @@ type KanbanCardProps = {
   card: Card;
   onDelete: (cardId: string) => void;
   onEdit: (cardId: string, title: string, details: string) => void;
+  locked: boolean;
 };
 
-export const KanbanCard = ({ card, onDelete, onEdit }: KanbanCardProps) => {
+export const KanbanCard = ({ card, onDelete, onEdit, locked }: KanbanCardProps) => {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(card.title);
   const [details, setDetails] = useState(card.details);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: card.id, disabled: editing });
+    useSortable({ id: card.id, disabled: editing || locked });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -69,7 +70,8 @@ export const KanbanCard = ({ card, onDelete, onEdit }: KanbanCardProps) => {
           <div className="flex items-center gap-2">
             <button
               type="submit"
-              className="rounded-full bg-[var(--secondary-purple)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white"
+              disabled={locked}
+              className="rounded-full bg-[var(--secondary-purple)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white disabled:opacity-60"
             >
               Save
             </button>
@@ -100,6 +102,7 @@ export const KanbanCard = ({ card, onDelete, onEdit }: KanbanCardProps) => {
                 setDetails(card.details);
                 setEditing(true);
               }}
+              disabled={locked}
               className="rounded-full border border-transparent px-2 py-1 text-xs font-semibold text-[var(--gray-text)] transition hover:border-[var(--stroke)] hover:text-[var(--navy-dark)]"
               aria-label={`Edit ${card.title}`}
             >
@@ -108,6 +111,7 @@ export const KanbanCard = ({ card, onDelete, onEdit }: KanbanCardProps) => {
             <button
               type="button"
               onClick={() => onDelete(card.id)}
+              disabled={locked}
               className="rounded-full border border-transparent px-2 py-1 text-xs font-semibold text-[var(--gray-text)] transition hover:border-[var(--stroke)] hover:text-[var(--navy-dark)]"
               aria-label={`Delete ${card.title}`}
             >

@@ -25,6 +25,7 @@ export const KanbanBoard = ({ onLogout }: KanbanBoardProps) => {
   const persistedRef = useRef<BoardData | null>(null);
   const [error, setError] = useState("");
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const [chatPending, setChatPending] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -33,27 +34,32 @@ export const KanbanBoard = ({ onLogout }: KanbanBoardProps) => {
   );
 
   useEffect(() => {
-    fetch("/api/board", { credentials: "include" }).then(async (response) => {
-      if (!response.ok) {
-        setError("Could not load the board.");
-        return;
-      }
-      const data = (await response.json()) as BoardData;
-      persistedRef.current = data;
-      setBoard(data);
-    });
+    fetch("/api/board", { credentials: "include" })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error();
+        }
+        const data = (await response.json()) as BoardData;
+        persistedRef.current = data;
+        setBoard(data);
+      })
+      .catch(() => setError("Could not load the board."));
   }, []);
 
   const save = async (next: BoardData) => {
     const previous = persistedRef.current;
     setBoard(next);
-    const response = await fetch("/api/board", {
-      method: "PUT",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(next),
-    });
-    if (!response.ok) {
+    try {
+      const response = await fetch("/api/board", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      });
+      if (!response.ok) {
+        throw new Error();
+      }
+    } catch {
       if (previous) {
         setBoard(previous);
       }
@@ -97,13 +103,20 @@ export const KanbanBoard = ({ onLogout }: KanbanBoardProps) => {
   };
 
   const handleRenameCommit = (columnId: string, title: string) => {
-    if (!board) {
+    const persisted = persistedRef.current;
+    if (!board || !persisted) {
+      return;
+    }
+    const trimmed = title.trim();
+    const saved = persisted.columns.find((column) => column.id === columnId)?.title;
+    if (!trimmed || trimmed === saved) {
+      handleRenameColumn(columnId, saved ?? title);
       return;
     }
     const next = {
       ...board,
       columns: board.columns.map((column) =>
-        column.id === columnId ? { ...column, title } : column
+        column.id === columnId ? { ...column, title: trimmed } : column
       ),
     };
     void save(next);
@@ -164,7 +177,7 @@ export const KanbanBoard = ({ onLogout }: KanbanBoardProps) => {
       ...board,
       cards: {
         ...board.cards,
-        [cardId]: { ...board.cards[cardId], title, details },
+        [cardId]: { ...board.cards[cardId], title, details: details || "No details yet." },
       },
     };
     void save(next);
@@ -260,6 +273,7 @@ export const KanbanBoard = ({ onLogout }: KanbanBoardProps) => {
                   onAddCard={handleAddCard}
                   onDeleteCard={handleDeleteCard}
                   onEditCard={handleEditCard}
+                  locked={chatPending}
                 />
               ))}
             </section>
@@ -271,7 +285,11 @@ export const KanbanBoard = ({ onLogout }: KanbanBoardProps) => {
               ) : null}
             </DragOverlay>
           </DndContext>
-          <ChatSidebar onBoard={handleChatBoard} />
+          <ChatSidebar
+            onBoard={handleChatBoard}
+            pending={chatPending}
+            onPendingChange={setChatPending}
+          />
         </div>
       </main>
     </div>

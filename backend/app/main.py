@@ -1,6 +1,7 @@
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
@@ -9,7 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.ai import chat
 from app.board import valid_board
-from app.db import get_board, init_db, save_board
+from app.db import check_user, get_board, init_db, save_board
 
 
 @asynccontextmanager
@@ -34,7 +35,7 @@ class LoginBody(BaseModel):
 
 
 class HistoryItem(BaseModel):
-    role: str
+    role: Literal["user", "assistant"]
     content: str
 
 
@@ -57,7 +58,7 @@ def health() -> dict[str, bool]:
 
 @app.post("/api/login")
 def login(body: LoginBody, request: Request) -> dict[str, str]:
-    if body.username != "user" or body.password != "password":
+    if not check_user(body.username, body.password):
         raise HTTPException(status_code=401)
     request.session["username"] = body.username
     return {"username": body.username}

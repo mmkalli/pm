@@ -10,12 +10,13 @@ type ChatMessage = {
 
 type ChatSidebarProps = {
   onBoard: (board: BoardData) => void;
+  pending: boolean;
+  onPendingChange: (pending: boolean) => void;
 };
 
-export const ChatSidebar = ({ onBoard }: ChatSidebarProps) => {
+export const ChatSidebar = ({ onBoard, pending, onPendingChange }: ChatSidebarProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
-  const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -27,7 +28,7 @@ export const ChatSidebar = ({ onBoard }: ChatSidebarProps) => {
     const history = messages;
     setMessages((current) => [...current, { role: "user", content: message }]);
     setDraft("");
-    setPending(true);
+    onPendingChange(true);
     setError("");
     try {
       const response = await fetch("/api/chat", {
@@ -54,7 +55,7 @@ export const ChatSidebar = ({ onBoard }: ChatSidebarProps) => {
     } catch {
       setError("Could not send the message.");
     } finally {
-      setPending(false);
+      onPendingChange(false);
     }
   };
 

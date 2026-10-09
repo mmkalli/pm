@@ -89,8 +89,21 @@ def test_put_invalid_board_is_400_and_unchanged():
         duplicate["columns"][1]["cardIds"].append("card-1")
         empty_title = json.loads(json.dumps(original))
         empty_title["cards"]["card-1"]["title"] = ""
+        not_dicts = {"columns": ["a", "b", "c", "d", "e"], "cards": {}}
+        orphan = json.loads(json.dumps(original))
+        orphan["cards"]["card-x"] = {"id": "card-x", "title": "Lost", "details": ""}
+        bad_details = json.loads(json.dumps(original))
+        bad_details["cards"]["card-1"]["details"] = 5
 
-        for payload in (sixth, changed_id, duplicate, empty_title):
+        for payload in (
+            sixth,
+            changed_id,
+            duplicate,
+            empty_title,
+            not_dicts,
+            orphan,
+            bad_details,
+        ):
             response = client.put("/api/board", json=payload)
             assert response.status_code == 400
             assert client.get("/api/board").json() == original

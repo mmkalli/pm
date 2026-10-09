@@ -33,6 +33,7 @@ A board is valid when:
 - each column title is non-empty
 - every `cardIds` entry exists in `cards`, and each card's `id` matches its key
 - a card id appears in only one column
+- every card in `cards` is listed in a column
 - card titles are non-empty
 
 ## Shared API

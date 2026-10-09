@@ -12,20 +12,26 @@ export const App = () => {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/api/me", { credentials: "include" }).then((response) => {
-      setSession(response.ok ? "user" : "guest");
-    });
+    fetch("/api/me", { credentials: "include" })
+      .then((response) => setSession(response.ok ? "user" : "guest"))
+      .catch(() => setSession("guest"));
   }, []);
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
-    const response = await fetch("/api/login", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    });
+    let response: Response;
+    try {
+      response = await fetch("/api/login", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+    } catch {
+      setError("Could not reach the server.");
+      return;
+    }
     if (!response.ok) {
       setError("Invalid username or password.");
       return;

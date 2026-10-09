@@ -1,9 +1,12 @@
 import json
 import os
+import time
+import urllib.error
 import urllib.request
 
 MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
 URL = "https://openrouter.ai/api/v1/chat/completions"
+RETRY_DELAY = 1
 
 
 def chat(board: dict, history: list[dict], message: str) -> tuple[str, object]:
@@ -32,7 +35,9 @@ def chat(board: dict, history: list[dict], message: str) -> tuple[str, object]:
         }
     ).encode()
     payload: dict = {}
-    for _ in range(3):
+    for attempt in range(3):
+        if attempt:
+            time.sleep(RETRY_DELAY)
         request = urllib.request.Request(
             URL,
             data=body,
@@ -42,8 +47,11 @@ def chat(board: dict, history: list[dict], message: str) -> tuple[str, object]:
             },
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=180) as response:
-            payload = json.load(response)
+        try:
+            with urllib.request.urlopen(request, timeout=180) as response:
+                payload = json.load(response)
+        except urllib.error.HTTPError as error:
+            payload = {"error": {"message": f"OpenRouter HTTP {error.code}"}}
         if "choices" in payload:
             break
     if "choices" not in payload:
