@@ -1,18 +1,25 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { api, errorText, type ChatMessage } from "@/lib/api";
+import { api, ApiError, errorText, type ChatMessage } from "@/lib/api";
 import type { BoardData } from "@/lib/kanban";
 import { errorClass, inputClass, labelClass, primaryButton } from "@/components/ui";
 
 type ChatSidebarProps = {
   boardId: number;
-  onBoard: (board: BoardData) => void;
+  onBoard: (board: BoardData, version: number) => void;
+  onConflict: () => void;
   pending: boolean;
   onPendingChange: (pending: boolean) => void;
 };
 
-export const ChatSidebar = ({ boardId, onBoard, pending, onPendingChange }: ChatSidebarProps) => {
+export const ChatSidebar = ({
+  boardId,
+  onBoard,
+  onConflict,
+  pending,
+  onPendingChange,
+}: ChatSidebarProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
@@ -29,16 +36,19 @@ export const ChatSidebar = ({ boardId, onBoard, pending, onPendingChange }: Chat
     onPendingChange(true);
     setError("");
     try {
-      const data = await api<{ reply: string; board: BoardData | null }>(
+      const data = await api<{ reply: string; board: BoardData | null; version: number }>(
         `/api/boards/${boardId}/chat`,
         "POST",
         { message, history }
       );
       setMessages((current) => [...current, { role: "assistant", content: data.reply }]);
       if (data.board) {
-        onBoard(data.board);
+        onBoard(data.board, data.version);
       }
     } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 409) {
+        onConflict();
+      }
       setError(errorText(caught, "Could not send the message."));
     } finally {
       onPendingChange(false);

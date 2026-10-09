@@ -70,7 +70,7 @@ def test_put_renamed_column_is_returned_by_get(user_client):
     data["columns"][0]["title"] = "Ideas"
     put = user_client.put(f"/api/boards/{board_id}/data", json=data)
     assert put.status_code == 200
-    assert put.json() == data
+    assert put.json() == {"data": data, "version": 2}
     stored = user_client.get(f"/api/boards/{board_id}").json()
     assert stored["data"]["columns"][0]["title"] == "Ideas"
     assert stored["updatedAt"] >= stored["createdAt"]

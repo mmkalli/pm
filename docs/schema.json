@@ -1,5 +1,5 @@
 {
-  "user_version": 1,
+  "user_version": 2,
   "users": {
     "id": "integer primary key",
     "username": "text unique not null collate nocase",
@@ -12,7 +12,13 @@
     "user_id": "integer not null references users(id) on delete cascade",
     "name": "text not null",
     "data": "text not null",
+    "version": "integer not null default 1",
     "created_at": "text not null default now (ISO 8601 UTC)",
     "updated_at": "text not null default now (ISO 8601 UTC)"
+  },
+  "board_members": {
+    "board_id": "integer not null references boards(id) on delete cascade",
+    "user_id": "integer not null references users(id) on delete cascade",
+    "primary key": "(board_id, user_id)"
   }
 }

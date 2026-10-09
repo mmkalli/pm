@@ -6,16 +6,17 @@ import { bodiesFor, mockFetch, type Reply } from "@/test/mockFetch";
 
 const user = { id: 1, username: "user", isAdmin: true };
 const boards = [
-  { id: 1, name: "Roadmap", cardCount: 8, createdAt: "", updatedAt: "" },
+  { id: 1, name: "Roadmap", cardCount: 8, owner: "user", role: "owner", createdAt: "", updatedAt: "" },
 ];
 
 const signedInApi = (method: string, path: string): Reply | undefined => {
   if (path === "/api/me") return { body: user };
   if (path === "/api/boards") return { body: boards };
   if (path === "/api/boards/1") {
-    return { body: { ...boards[0], data: initialData } };
+    return { body: { ...boards[0], version: 1, data: initialData } };
   }
   if (path === "/api/logout" && method === "POST") return { body: { ok: true } };
+  if (path.endsWith("/members")) return { body: [] };
   return undefined;
 };
 
@@ -92,7 +93,7 @@ describe("App", () => {
       if (!registered) return { status: 401 };
       if (path === "/api/boards") return { body: [{ ...boards[0], id: 2, name: "My Board" }] };
       if (path === "/api/boards/2") {
-        return { body: { id: 2, name: "My Board", data: { columns: [{ id: "a", title: "A", cardIds: [] }], cards: {} } } };
+        return { body: { id: 2, name: "My Board", owner: "alice", role: "owner", version: 1, data: { columns: [{ id: "a", title: "A", cardIds: [] }], cards: {} } } };
       }
       return undefined;
     });

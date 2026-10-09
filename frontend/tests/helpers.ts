@@ -38,5 +38,6 @@ export const columns = (page: Page) => page.locator('[data-testid^="column-"]');
 
 export const waitForSave = (page: Page) =>
   page.waitForResponse(
-    (response) => response.url().endsWith("/data") && response.request().method() === "PUT"
+    (response) =>
+      new URL(response.url()).pathname.endsWith("/data") && response.request().method() === "PUT"
   );

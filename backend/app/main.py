@@ -69,6 +69,10 @@ class BoardNameBody(BaseModel):
     name: BoardName
 
 
+class MemberBody(BaseModel):
+    username: str
+
+
 class HistoryItem(BaseModel):
     role: Literal["user", "assistant"]
     content: str
@@ -98,10 +102,13 @@ CurrentUser = Annotated[dict, Depends(current_user)]
 AdminUser = Annotated[dict, Depends(admin_user)]
 
 
-def owned_board(user: dict, board_id: int) -> dict:
+def board_for(user: dict, board_id: int, owner: bool = False) -> dict:
+    """The board if the user owns it or is a member; 403 for a member when owner is required."""
     board = db.get_board(user["id"], board_id)
     if board is None:
         raise HTTPException(status_code=404)
+    if owner and board["role"] != "owner":
+        raise HTTPException(status_code=403, detail="Only the owner can do that")
     return board
 
 
@@ -160,6 +167,8 @@ def delete_account(body: DeleteAccountBody, user: CurrentUser, request: Request)
 
 # Boards
 
+STALE = "This board was changed by someone else. Reload to see the latest version."
+
 
 @app.get("/api/boards")
 def boards(user: CurrentUser) -> list[dict]:
@@ -173,45 +182,76 @@ def create_board(body: BoardNameBody, user: CurrentUser) -> dict:
 
 @app.get("/api/boards/{board_id}")
 def read_board(board_id: int, user: CurrentUser) -> dict:
-    return owned_board(user, board_id)
+    return board_for(user, board_id)
 
 
 @app.patch("/api/boards/{board_id}")
 def rename_board(board_id: int, body: BoardNameBody, user: CurrentUser) -> dict:
-    summary = db.rename_board(user["id"], board_id, body.name)
-    if summary is None:
-        raise HTTPException(status_code=404)
-    return summary
+    board_for(user, board_id, owner=True)
+    db.rename_board(board_id, body.name)
+    return db.board_summary(user["id"], board_id)
 
 
 @app.put("/api/boards/{board_id}/data")
-def write_board(board_id: int, body: dict, user: CurrentUser) -> dict:
-    owned_board(user, board_id)
+def write_board(board_id: int, body: dict, user: CurrentUser, version: int | None = None) -> dict:
+    board_for(user, board_id)
     if not valid_board(body):
         raise HTTPException(status_code=400, detail="Invalid board")
-    db.save_board(user["id"], board_id, body)
-    return body
+    saved = db.save_board(board_id, body, version)
+    if saved is None:
+        raise HTTPException(status_code=409, detail=STALE)
+    return {"data": body, "version": saved}
 
 
 @app.delete("/api/boards/{board_id}", status_code=204)
 def delete_board(board_id: int, user: CurrentUser) -> None:
-    if not db.delete_board(user["id"], board_id):
-        raise HTTPException(status_code=404)
+    board_for(user, board_id, owner=True)
+    db.delete_board(board_id)
 
 
 @app.post("/api/boards/{board_id}/chat")
 def post_chat(board_id: int, body: ChatBody, user: CurrentUser) -> dict:
-    board = owned_board(user, board_id)
+    board = board_for(user, board_id)
     try:
         reply, returned = chat(
             board["data"], [item.model_dump() for item in body.history], body.message
         )
     except (RuntimeError, ValueError, KeyError, TypeError) as error:
         raise HTTPException(status_code=502, detail="The assistant is unavailable") from error
-    if valid_board(returned):
-        db.save_board(user["id"], board_id, returned)
-        return {"reply": reply, "board": returned}
-    return {"reply": reply, "board": None}
+    if not valid_board(returned):
+        return {"reply": reply, "board": None, "version": board["version"]}
+    saved = db.save_board(board_id, returned, board["version"])
+    if saved is None:
+        raise HTTPException(status_code=409, detail=STALE)
+    return {"reply": reply, "board": returned, "version": saved}
+
+
+# Members
+
+
+@app.get("/api/boards/{board_id}/members")
+def members(board_id: int, user: CurrentUser) -> list[dict]:
+    board_for(user, board_id)
+    return db.list_members(board_id)
+
+
+@app.post("/api/boards/{board_id}/members", status_code=201)
+def add_member(board_id: int, body: MemberBody, user: CurrentUser) -> dict:
+    board_for(user, board_id, owner=True)
+    member_id = db.find_user_id(body.username)
+    if member_id is None:
+        raise HTTPException(status_code=404, detail="No user with that name")
+    if member_id == user["id"] or not db.add_member(board_id, member_id):
+        raise HTTPException(status_code=409, detail="That user already has this board")
+    return {"id": member_id, "username": db.get_user(member_id)["username"]}
+
+
+@app.delete("/api/boards/{board_id}/members/{member_id}", status_code=204)
+def remove_member(board_id: int, member_id: int, user: CurrentUser) -> None:
+    board_for(user, board_id, owner=member_id != user["id"])
+    if not db.remove_member(board_id, member_id):
+        raise HTTPException(status_code=404)
+
 
 
 # Admin

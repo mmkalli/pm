@@ -7,7 +7,7 @@ from pathlib import Path
 from app.auth import hash_password, verify_password
 from app.board import INITIAL_BOARD, empty_board
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 NOW = "(strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
 SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS users (
@@ -22,16 +22,19 @@ CREATE TABLE IF NOT EXISTS boards (
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     data TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT {NOW},
     updated_at TEXT NOT NULL DEFAULT {NOW}
 );
 CREATE INDEX IF NOT EXISTS boards_user_id ON boards(user_id);
+CREATE TABLE IF NOT EXISTS board_members (
+    board_id INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (board_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS board_members_user_id ON board_members(user_id);
 """
 USER_COLUMNS = "id, username, is_admin"
-BOARD_SUMMARY = """
-    id, name, created_at, updated_at,
-    (SELECT count(*) FROM json_each(boards.data, '$.cards')) AS card_count
-"""
 
 
 def database_path() -> Path:
@@ -71,6 +74,8 @@ def init_db() -> None:
         ).fetchone()
         if version == 0 and legacy:
             migrate_mvp(conn)
+        if version == 1:
+            conn.execute("ALTER TABLE boards ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
         conn.executescript(SCHEMA)
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         if conn.execute("SELECT 1 FROM users").fetchone() is None:
@@ -169,32 +174,67 @@ def delete_user(user_id: int) -> bool:
 
 # Boards
 
+BOARD_SELECT = """
+    SELECT boards.id, boards.name, boards.data, boards.version,
+        boards.created_at, boards.updated_at, owner.username AS owner,
+        CASE WHEN boards.user_id = :user THEN 'owner' ELSE 'member' END AS role,
+        (SELECT count(*) FROM json_each(boards.data, '$.cards')) AS card_count
+    FROM boards JOIN users AS owner ON owner.id = boards.user_id
+    WHERE (
+        boards.user_id = :user
+        OR EXISTS (
+            SELECT 1 FROM board_members
+            WHERE board_members.board_id = boards.id AND board_members.user_id = :user
+        )
+    )
+"""
+
 
 def summary_dict(row: sqlite3.Row) -> dict:
     return {
         "id": row["id"],
         "name": row["name"],
         "cardCount": row["card_count"],
+        "owner": row["owner"],
+        "role": row["role"],
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],
     }
 
 
 def list_boards(user_id: int) -> list[dict]:
+    """Boards the user owns or is a member of."""
     with closing(connect()) as conn:
-        rows = conn.execute(
-            f"SELECT {BOARD_SUMMARY} FROM boards WHERE user_id = ? ORDER BY id", (user_id,)
-        ).fetchall()
+        rows = conn.execute(f"{BOARD_SELECT} ORDER BY boards.id", {"user": user_id}).fetchall()
     return [summary_dict(row) for row in rows]
 
 
-def board_summary(user_id: int, board_id: int) -> dict | None:
+def find_board(user_id: int, board_id: int) -> sqlite3.Row | None:
     with closing(connect()) as conn:
-        row = conn.execute(
-            f"SELECT {BOARD_SUMMARY} FROM boards WHERE id = ? AND user_id = ?",
-            (board_id, user_id),
+        return conn.execute(
+            f"{BOARD_SELECT} AND boards.id = :board", {"user": user_id, "board": board_id}
         ).fetchone()
+
+
+def board_summary(user_id: int, board_id: int) -> dict | None:
+    row = find_board(user_id, board_id)
     return summary_dict(row) if row else None
+
+
+def get_board(user_id: int, board_id: int) -> dict | None:
+    row = find_board(user_id, board_id)
+    if row is None:
+        return None
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "owner": row["owner"],
+        "role": row["role"],
+        "version": row["version"],
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+        "data": json.loads(row["data"]),
+    }
 
 
 def create_board(user_id: int, name: str, data: dict) -> dict:
@@ -203,44 +243,69 @@ def create_board(user_id: int, name: str, data: dict) -> dict:
     return board_summary(user_id, board_id)
 
 
-def get_board(user_id: int, board_id: int) -> dict | None:
-    with closing(connect()) as conn:
-        row = conn.execute(
-            "SELECT id, name, data, created_at, updated_at FROM boards WHERE id = ? AND user_id = ?",
-            (board_id, user_id),
-        ).fetchone()
-    if row is None:
-        return None
-    return {
-        "id": row["id"],
-        "name": row["name"],
-        "createdAt": row["created_at"],
-        "updatedAt": row["updated_at"],
-        "data": json.loads(row["data"]),
-    }
-
-
-def rename_board(user_id: int, board_id: int, name: str) -> dict | None:
+def rename_board(board_id: int, name: str) -> None:
     with closing(connect()) as conn, conn:
         conn.execute(
-            f"UPDATE boards SET name = ?, updated_at = {NOW} WHERE id = ? AND user_id = ?",
-            (name, board_id, user_id),
+            f"UPDATE boards SET name = ?, updated_at = {NOW} WHERE id = ?", (name, board_id)
         )
-    return board_summary(user_id, board_id)
 
 
-def save_board(user_id: int, board_id: int, data: dict) -> bool:
+def save_board(board_id: int, data: dict, expected_version: int | None = None) -> int | None:
+    """Save data and return the new version, or None when expected_version is stale."""
+    with closing(connect()) as conn, conn:
+        row = conn.execute(
+            f"""
+            UPDATE boards SET data = ?, version = version + 1, updated_at = {NOW}
+            WHERE id = ? AND (? IS NULL OR version = ?)
+            RETURNING version
+            """,
+            (json.dumps(data), board_id, expected_version, expected_version),
+        ).fetchone()
+    return row["version"] if row else None
+
+
+def delete_board(board_id: int) -> None:
+    with closing(connect()) as conn, conn:
+        conn.execute("DELETE FROM boards WHERE id = ?", (board_id,))
+
+
+# Members
+
+
+def list_members(board_id: int) -> list[dict]:
+    with closing(connect()) as conn:
+        rows = conn.execute(
+            """
+            SELECT users.id, users.username FROM board_members
+            JOIN users ON users.id = board_members.user_id
+            WHERE board_members.board_id = ? ORDER BY users.username
+            """,
+            (board_id,),
+        ).fetchall()
+    return [{"id": row["id"], "username": row["username"]} for row in rows]
+
+
+def find_user_id(username: str) -> int | None:
+    with closing(connect()) as conn:
+        row = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+    return row["id"] if row else None
+
+
+def add_member(board_id: int, user_id: int) -> bool:
+    """Returns False when the user is already a member."""
+    with closing(connect()) as conn, conn:
+        try:
+            conn.execute(
+                "INSERT INTO board_members (board_id, user_id) VALUES (?, ?)", (board_id, user_id)
+            )
+        except sqlite3.IntegrityError:
+            return False
+    return True
+
+
+def remove_member(board_id: int, user_id: int) -> bool:
     with closing(connect()) as conn, conn:
         cursor = conn.execute(
-            f"UPDATE boards SET data = ?, updated_at = {NOW} WHERE id = ? AND user_id = ?",
-            (json.dumps(data), board_id, user_id),
-        )
-    return cursor.rowcount > 0
-
-
-def delete_board(user_id: int, board_id: int) -> bool:
-    with closing(connect()) as conn, conn:
-        cursor = conn.execute(
-            "DELETE FROM boards WHERE id = ? AND user_id = ?", (board_id, user_id)
+            "DELETE FROM board_members WHERE board_id = ? AND user_id = ?", (board_id, user_id)
         )
     return cursor.rowcount > 0

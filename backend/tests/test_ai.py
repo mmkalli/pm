@@ -94,10 +94,10 @@ def test_chat_saves_valid_board(monkeypatch, user_client):
         "labels": ["ai"],
     }
     updated["columns"].append({"id": "col-blocked", "title": "Blocked", "cardIds": []})
-    fake_model(monkeypatch, {"reply": "Updated", "board": updated})
+    fake_model(monkeypatch, {"reply": "Updated", "board": updated, "version": 2})
     response = send(user_client, board_id, "Rename and add")
     assert response.status_code == 200
-    assert response.json() == {"reply": "Updated", "board": updated}
+    assert response.json() == {"reply": "Updated", "board": updated, "version": 2}
     assert user_client.get(f"/api/boards/{board_id}").json()["data"] == updated
 
 
@@ -113,10 +113,10 @@ def test_chat_only_changes_the_requested_board(monkeypatch, user_client):
 
 
 def test_chat_null_board_leaves_stored_board(monkeypatch, user_client):
-    fake_model(monkeypatch, {"reply": "No change", "board": None})
+    fake_model(monkeypatch, {"reply": "No change", "board": None, "version": 1})
     board_id = first_board_id(user_client)
     response = send(user_client, board_id, "Just talk")
-    assert response.json() == {"reply": "No change", "board": None}
+    assert response.json() == {"reply": "No change", "board": None, "version": 1}
     assert user_client.get(f"/api/boards/{board_id}").json()["data"] == INITIAL_BOARD
 
 
@@ -133,7 +133,7 @@ def test_chat_drops_invalid_board_and_keeps_reply(monkeypatch, user_client, boar
     board_id = first_board_id(user_client)
     response = send(user_client, board_id, "Break it")
     assert response.status_code == 200
-    assert response.json() == {"reply": "Tried", "board": None}
+    assert response.json() == {"reply": "Tried", "board": None, "version": 1}
     assert user_client.get(f"/api/boards/{board_id}").json()["data"] == INITIAL_BOARD
 
 
@@ -151,10 +151,10 @@ def test_chat_saves_moved_card_in_destination_only(monkeypatch, user_client):
 
 
 def test_chat_strips_markdown_fence(monkeypatch, user_client):
-    fenced = "```json\n" + json.dumps({"reply": "fenced", "board": None}) + "\n```"
+    fenced = "```json\n" + json.dumps({"reply": "fenced", "board": None, "version": 1}) + "\n```"
     fake_model(monkeypatch, fenced)
     response = send(user_client, first_board_id(user_client))
-    assert response.json() == {"reply": "fenced", "board": None}
+    assert response.json() == {"reply": "fenced", "board": None, "version": 1}
 
 
 @pytest.mark.parametrize("content", ["not json", json.dumps({"board": None})])

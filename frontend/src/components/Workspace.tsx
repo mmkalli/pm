@@ -10,6 +10,24 @@ import { errorClass, ghostButton, inputClass, primaryButton } from "@/components
 
 type View = "boards" | "account" | "users";
 
+const LAST_BOARD = "pm:lastBoard";
+
+const readLastBoard = () => {
+  try {
+    return Number(localStorage.getItem(LAST_BOARD));
+  } catch {
+    return 0;
+  }
+};
+
+const rememberBoard = (id: number) => {
+  try {
+    localStorage.setItem(LAST_BOARD, String(id));
+  } catch {
+    // Storage can be unavailable; the first board opens instead.
+  }
+};
+
 type WorkspaceProps = {
   user: User;
   onLogout: () => void;
@@ -27,10 +45,16 @@ export const Workspace = ({ user, onLogout, onSignedOut }: WorkspaceProps) => {
     api<BoardSummary[]>("/api/boards")
       .then((list) => {
         setBoards(list);
-        setSelectedId(list[0]?.id ?? null);
+        const last = readLastBoard();
+        setSelectedId(list.find((board) => board.id === last)?.id ?? list[0]?.id ?? null);
       })
       .catch(() => setError("Could not load your boards."));
   }, []);
+
+  const selectBoard = (id: number) => {
+    setSelectedId(id);
+    rememberBoard(id);
+  };
 
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -41,7 +65,7 @@ export const Workspace = ({ user, onLogout, onSignedOut }: WorkspaceProps) => {
     try {
       const created = await api<BoardSummary>("/api/boards", "POST", { name });
       setBoards((current) => [...current, created]);
-      setSelectedId(created.id);
+      selectBoard(created.id);
       setNewName("");
       setError("");
     } catch (caught) {
@@ -60,6 +84,11 @@ export const Workspace = ({ user, onLogout, onSignedOut }: WorkspaceProps) => {
     setBoards(remaining);
     setSelectedId(remaining[0]?.id ?? null);
   };
+
+  const boardGroups: [string, string, BoardSummary[]][] = [
+    ["Your boards", "Boards", boards.filter((board) => board.role === "owner")],
+    ["Shared with you", "Shared boards", boards.filter((board) => board.role === "member")],
+  ];
 
   const navItems: { id: View; label: string }[] = [
     { id: "boards", label: "Boards" },
@@ -119,29 +148,42 @@ export const Workspace = ({ user, onLogout, onSignedOut }: WorkspaceProps) => {
         {view === "boards" ? (
           <div className="flex flex-col gap-6 lg:flex-row">
             <aside className="flex w-full shrink-0 flex-col gap-4 rounded-3xl border border-[var(--stroke)] bg-white/90 p-5 shadow-[var(--shadow)] lg:w-60">
-              <h2 className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">
-                Your boards
-              </h2>
-              <ul className="flex flex-col gap-1" aria-label="Boards">
-                {boards.map((board) => (
-                  <li key={board.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(board.id)}
-                      aria-current={board.id === selectedId ? "true" : undefined}
-                      className={clsx(
-                        "flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold transition",
-                        board.id === selectedId
-                          ? "bg-[var(--surface)] text-[var(--navy-dark)] ring-1 ring-[var(--primary-blue)]"
-                          : "text-[var(--gray-text)] hover:bg-[var(--surface)]"
-                      )}
-                    >
-                      <span className="truncate">{board.name}</span>
-                      <span className="text-xs text-[var(--gray-text)]">{board.cardCount}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              {boardGroups.map(([title, label, items]) =>
+                items.length || label === "Boards" ? (
+                  <div key={label} className="flex flex-col gap-2">
+                    <h2 className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">
+                      {title}
+                    </h2>
+                    <ul className="flex flex-col gap-1" aria-label={label}>
+                      {items.map((board) => (
+                        <li key={board.id}>
+                          <button
+                            type="button"
+                            onClick={() => selectBoard(board.id)}
+                            aria-current={board.id === selectedId ? "true" : undefined}
+                            className={clsx(
+                              "flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold transition",
+                              board.id === selectedId
+                                ? "bg-[var(--surface)] text-[var(--navy-dark)] ring-1 ring-[var(--primary-blue)]"
+                                : "text-[var(--gray-text)] hover:bg-[var(--surface)]"
+                            )}
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate">{board.name}</span>
+                              {board.role === "member" ? (
+                                <span className="block text-xs font-medium text-[var(--gray-text)]">
+                                  by {board.owner}
+                                </span>
+                              ) : null}
+                            </span>
+                            <span className="text-xs text-[var(--gray-text)]">{board.cardCount}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null
+              )}
               <form onSubmit={handleCreate} className="space-y-2">
                 <input
                   value={newName}
@@ -165,6 +207,7 @@ export const Workspace = ({ user, onLogout, onSignedOut }: WorkspaceProps) => {
                 <KanbanBoard
                   key={selectedId}
                   boardId={selectedId}
+                  userId={user.id}
                   onSummaryChange={(change) => handleSummaryChange(selectedId, change)}
                   onDeleted={() => handleDeleted(selectedId)}
                 />

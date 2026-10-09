@@ -21,7 +21,7 @@ npm run test:e2e
 npm run lint
 ```
 
-Unit tests stub `fetch` with `src/test/mockFetch.ts` (`mockFetch(handler)` and `bodiesFor(fetchMock, method, path)`). `src/test/setup.ts` unstubs globals and restores spies after each test. Keep line coverage above 95%.
+Unit tests stub `fetch` with `src/test/mockFetch.ts` (`mockFetch(handler)` and `bodiesFor(fetchMock, method, path)`). `src/test/setup.ts` points `localStorage` at jsdom (Node 26 has its own global `localStorage`, undefined without `--localstorage-file`), and clears storage, unstubs globals, and restores spies after each test. Keep line coverage above 95%.
 
 Playwright tests register a throwaway user per test (`tests/helpers.ts`) and delete it afterwards, so they do not touch the `user` account's boards. `tests/admin.spec.ts` signs in as `user` / `password` and needs that password unchanged.
 
@@ -41,8 +41,8 @@ Defined in `src/lib/kanban.ts`.
 
 `App` calls `GET /api/me`. No session shows `AuthForm` (sign in, or switch to create an account). A session shows `Workspace`.
 
-- `Workspace`: top bar with Boards, Account, Users (admins only), the username, and Log out. The Boards view lists the user's boards with card counts, opens the first, and creates boards. The selected board is rendered as `<KanbanBoard key={id}>`, so switching boards remounts it and clears the chat.
-- `KanbanBoard`: loads `GET /api/boards/{id}`, saves the whole board with `PUT /api/boards/{id}/data`, and rolls back with an error on failure. The board name renames on blur (`PATCH`); Delete board asks for confirmation. Header shows card, high priority, and overdue counts, plus search, priority, and label filters. Columns can be added (up to 12), moved left or right, renamed on blur, and removed when empty.
+- `Workspace`: top bar with Boards, Account, Users (admins only), the username, and Log out. The Boards view lists "Your boards" and "Shared with you" (with the owner) and creates boards. The last opened board id is kept in `localStorage` (`pm:lastBoard`) and reopened; otherwise the first board opens. The selected board is rendered as `<KanbanBoard key={id}>`, so switching boards remounts it and clears the chat.
+- `KanbanBoard`: loads `GET /api/boards/{id}`, saves the whole board with `PUT /api/boards/{id}/data?version=N`, and rolls back with an error on failure. A `409` (from a save or the chat) shows a conflict message and reloads the latest board. Owners rename on blur (`PATCH`) and Delete board; members see the name read-only and Leave board. `MembersPanel` shows the owner and members; the owner shares by username and removes members. Header shows card, high priority, and overdue counts, plus search, priority, and label filters. Columns can be added (up to 12), moved left or right, renamed on blur, and removed when empty.
 - Cards drag within and across columns (6px activation). Add takes title and details (empty details become `No details yet.`). Edit covers title, details, priority, due date, and comma-separated labels. Overdue due dates are highlighted.
 - `ChatSidebar` posts to `/api/boards/{id}/chat` with the in-memory thread. A returned board replaces the one on screen; `board: null` leaves it. While a request is pending, all board editing is disabled.
 - `AccountSettings`: change password (with confirmation field) and delete account (password plus browser confirm).
@@ -60,11 +60,12 @@ Defined in `src/lib/kanban.ts`.
 - `src/components/KanbanCard.tsx` — sortable card, edit form, `CardMeta` badges
 - `src/components/KanbanCardPreview.tsx` — drag overlay
 - `src/components/NewCardForm.tsx` — add-card form
+- `src/components/MembersPanel.tsx` — board members, share and remove
 - `src/components/ChatSidebar.tsx` — assistant thread and send
 - `src/components/AccountSettings.tsx` — password change and account deletion
 - `src/components/AdminUsers.tsx` — user management
 - `src/components/ui.ts` — shared Tailwind class strings
 - `src/lib/kanban.ts`, `src/lib/api.ts` — data helpers and API client
-- `tests/*.spec.ts` — Playwright: auth, board editing, multiple boards, admin
+- `tests/*.spec.ts` — Playwright: auth, board editing, multiple boards, sharing and conflicts, admin
 
 `next.config.ts` uses `output: "export"`. Docker builds `frontend/out` and FastAPI serves it at `/`.

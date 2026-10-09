@@ -24,7 +24,9 @@ def chat(board: dict, history: list[dict], message: str) -> tuple[str, object]:
                 "Each card id appears in exactly one column and matches its key in "
                 "cards. A card has a non-empty title, details text, and optional "
                 'priority ("low", "medium", or "high"), dueDate ("YYYY-MM-DD"), and '
-                "labels (list of non-empty strings). "
+                "labels (list of non-empty strings). Every card object repeats its "
+                'own id, for example "cards": {"card-a1": {"id": "card-a1", '
+                '"title": "Write spec", "details": ""}}. '
                 f"Today is {date.today().isoformat()}.\n"
                 "Current board:\n" + json.dumps(board)
             ),

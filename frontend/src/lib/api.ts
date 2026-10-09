@@ -11,10 +11,14 @@ export type AdminUserRow = User & {
   createdAt: string;
 };
 
+export type Role = "owner" | "member";
+
 export type BoardSummary = {
   id: number;
   name: string;
   cardCount: number;
+  owner: string;
+  role: Role;
   createdAt: string;
   updatedAt: string;
 };
@@ -22,9 +26,17 @@ export type BoardSummary = {
 export type BoardRecord = {
   id: number;
   name: string;
+  owner: string;
+  role: Role;
+  version: number;
   createdAt: string;
   updatedAt: string;
   data: BoardData;
+};
+
+export type Member = {
+  id: number;
+  username: string;
 };
 
 export type ChatMessage = {

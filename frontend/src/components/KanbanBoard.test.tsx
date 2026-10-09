@@ -29,27 +29,38 @@ type Options = {
   load?: Reply;
   chat?: Reply;
   chatGate?: Promise<unknown>;
+  role?: "owner" | "member";
+  members?: { id: number; username: string }[];
 };
 
 const setup = (options: Options = {}) => {
   let data = structuredClone(options.board ?? serverBoard);
   let name = "Roadmap";
+  let version = 1;
   const fetchMock = mockFetch(async (method, path, body) => {
     if (path === BOARD && method === "GET") {
-      return options.load ?? { body: { id: 7, name, createdAt: "", updatedAt: "", data } };
+      return (
+        options.load ?? {
+          body: { id: 7, name, owner: "user", role: options.role ?? "owner", version, createdAt: "", updatedAt: "", data },
+        }
+      );
     }
-    if (path === `${BOARD}/data` && method === "PUT") {
+    if (path.startsWith(`${BOARD}/data`) && method === "PUT") {
       if (options.put) return options.put;
       data = body as BoardData;
-      return { body };
+      version += 1;
+      return { body: { data, version } };
     }
     if (path === BOARD && method === "PATCH") {
       if (options.patch) return options.patch;
       name = (body as { name: string }).name;
       return { body: { id: 7, name } };
     }
-    if (path === BOARD && method === "DELETE") {
+    if ((path === BOARD || path.startsWith(`${BOARD}/members/`)) && method === "DELETE") {
       return options.remove ?? { status: 204 };
+    }
+    if (path === `${BOARD}/members` && method === "GET") {
+      return { body: options.members ?? [] };
     }
     if (path === `${BOARD}/chat` && method === "POST") {
       await options.chatGate;
@@ -59,12 +70,15 @@ const setup = (options: Options = {}) => {
   });
   const onSummaryChange = vi.fn();
   const onDeleted = vi.fn();
-  render(<KanbanBoard boardId={7} onSummaryChange={onSummaryChange} onDeleted={onDeleted} />);
+  render(<KanbanBoard boardId={7} userId={1} onSummaryChange={onSummaryChange} onDeleted={onDeleted} />);
   return {
     fetchMock,
     onSummaryChange,
     onDeleted,
-    puts: () => bodiesFor(fetchMock, "PUT", `${BOARD}/data`) as BoardData[],
+    puts: () =>
+      fetchMock.mock.calls
+        .filter(([input, init]) => String(input).startsWith(`${BOARD}/data`) && init?.method === "PUT")
+        .map(([, init]) => JSON.parse(String(init?.body)) as BoardData),
     chats: () => bodiesFor(fetchMock, "POST", `${BOARD}/chat`),
   };
 };
@@ -430,5 +444,77 @@ describe("KanbanBoard", () => {
     await pendingClick;
     await screen.findByText("All set");
     expect(screen.getByRole("button", { name: "Edit Server card" })).toBeEnabled();
+  });
+
+  it("sends the loaded version with each save and uses the returned one next", async () => {
+    const { fetchMock } = setup();
+    await addCard("First");
+    await waitFor(() => expect(screen.getByText("First")).toBeInTheDocument());
+    await addCard("Second");
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT").map(([input]) => input)
+      ).toEqual([`${BOARD}/data?version=1`, `${BOARD}/data?version=2`])
+    );
+  });
+
+  it("reloads the board and explains when a save conflicts", async () => {
+    const { fetchMock } = setup({ put: { status: 409 } });
+    const column = await addCard("Lost edit");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Someone else changed this board");
+    await waitFor(() => expect(bodiesFor(fetchMock, "GET", BOARD)).toHaveLength(2));
+    expect(within(column).queryByText("Lost edit")).not.toBeInTheDocument();
+    expect(within(column).getByText("Server card")).toBeInTheDocument();
+  });
+
+  it("uses the version from a chat board for the next save", async () => {
+    const changed = structuredClone(serverBoard);
+    changed.columns[0].title = "Ideas";
+    const { fetchMock } = setup({ chat: { body: { reply: "Done", board: changed, version: 5 } } });
+    await screen.findByText("Server card");
+    await sendChat("Rename");
+    await screen.findByDisplayValue("Ideas");
+    await addCard("After chat");
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT").map(([input]) => input)
+      ).toEqual([`${BOARD}/data?version=5`])
+    );
+  });
+
+  it("reloads the board when chat reports a conflict", async () => {
+    const { fetchMock } = setup({
+      chat: { status: 409, body: { detail: "This board was changed by someone else." } },
+    });
+    await screen.findByText("Server card");
+    await sendChat("Go");
+    expect(await screen.findByText("This board was changed by someone else.")).toBeInTheDocument();
+    await waitFor(() => expect(bodiesFor(fetchMock, "GET", BOARD)).toHaveLength(2));
+  });
+
+  it("lets a member leave instead of delete, and not rename", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { fetchMock, onDeleted } = setup({ role: "member" });
+    await screen.findByText("Server card");
+    expect(screen.getByLabelText("Board name")).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /delete board/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Add member by username")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /leave board/i }));
+    await waitFor(() => expect(onDeleted).toHaveBeenCalled());
+    expect(bodiesFor(fetchMock, "DELETE", `${BOARD}/members/1`)).toHaveLength(1);
+  });
+
+  it("shows an error when leaving fails", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    setup({ role: "member", remove: { status: 500 } });
+    await userEvent.click(await screen.findByRole("button", { name: /leave board/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not leave the board.");
+  });
+
+  it("shows the owner and members", async () => {
+    setup({ members: [{ id: 2, username: "alice" }] });
+    const members = await screen.findByTestId("members");
+    expect(await within(members).findByText("alice")).toBeInTheDocument();
+    expect(within(members).getByText("user (owner)")).toBeInTheDocument();
   });
 });

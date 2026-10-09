@@ -5,7 +5,7 @@
 This project is building a Project Management App. Key features:
 - A user can register, sign in, change their password, and delete their account
 - Admins manage users: create, reset password, grant or revoke admin, delete
-- Each user has any number of Kanban boards, each representing a project
+- Each user has any number of Kanban boards, each representing a project, and can share boards with other users
 - Board columns can be added, renamed, reordered, and removed when empty
 - Cards can be moved with drag and drop, and edited, with optional priority, due date, and labels
 - Cards can be searched and filtered by text, priority, and label
@@ -13,7 +13,7 @@ This project is building a Project Management App. Key features:
 
 ## Limitations
 
-Boards belong to one user; there is no sharing between users.
+A board has one owner. The owner can share it with other users as members, who can edit cards and columns and use the chat; only the owner renames, deletes, or manages members. Concurrent edits are detected with a board version, and the stale save is rejected.
 
 This runs locally (in a docker container). The seed admin is `user` / `password`.
 

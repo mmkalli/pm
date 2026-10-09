@@ -14,8 +14,9 @@ import {
 import { ChatSidebar } from "@/components/ChatSidebar";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
+import { MembersPanel } from "@/components/MembersPanel";
 import { errorClass, ghostButton, inputClass, primaryButton } from "@/components/ui";
-import { api, type BoardRecord, type BoardSummary } from "@/lib/api";
+import { api, ApiError, type BoardRecord, type BoardSummary } from "@/lib/api";
 import {
   MAX_COLUMNS,
   PRIORITIES,
@@ -38,13 +39,20 @@ import {
 
 type KanbanBoardProps = {
   boardId: number;
+  userId: number;
   onSummaryChange?: (change: Partial<BoardSummary>) => void;
   onDeleted?: () => void;
 };
 
-export const KanbanBoard = ({ boardId, onSummaryChange, onDeleted }: KanbanBoardProps) => {
+const CONFLICT = "Someone else changed this board, so your last change was not saved. The latest version is shown.";
+
+export const KanbanBoard = ({ boardId, userId, onSummaryChange, onDeleted }: KanbanBoardProps) => {
   const [board, setBoard] = useState<BoardData | null>(null);
   const persistedRef = useRef<BoardData | null>(null);
+  const versionRef = useRef(0);
+  const [owner, setOwner] = useState("");
+  const [isOwner, setIsOwner] = useState(false);
+  const [reloads, setReloads] = useState(0);
   const [name, setName] = useState("");
   const savedNameRef = useRef("");
   const [error, setError] = useState("");
@@ -63,19 +71,32 @@ export const KanbanBoard = ({ boardId, onSummaryChange, onDeleted }: KanbanBoard
     api<BoardRecord>(`/api/boards/${boardId}`)
       .then((record) => {
         persistedRef.current = record.data;
+        versionRef.current = record.version;
         savedNameRef.current = record.name;
         setBoard(record.data);
         setName(record.name);
+        setOwner(record.owner);
+        setIsOwner(record.role === "owner");
       })
       .catch(() => setError("Could not load the board."));
-  }, [boardId]);
+  }, [boardId, reloads]);
+
+  const reloadAfterConflict = () => {
+    setError(CONFLICT);
+    setReloads((count) => count + 1);
+  };
 
   const save = async (next: BoardData) => {
     const previous = persistedRef.current;
     setBoard(next);
+    let saved: { version: number };
     try {
-      await api(`/api/boards/${boardId}/data`, "PUT", next);
-    } catch {
+      saved = await api(`/api/boards/${boardId}/data?version=${versionRef.current}`, "PUT", next);
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 409) {
+        reloadAfterConflict();
+        return;
+      }
       if (previous) {
         setBoard(previous);
       }
@@ -83,6 +104,7 @@ export const KanbanBoard = ({ boardId, onSummaryChange, onDeleted }: KanbanBoard
       return;
     }
     persistedRef.current = next;
+    versionRef.current = saved.version;
     setError("");
     onSummaryChange?.({ cardCount: Object.keys(next.cards).length });
   };
@@ -107,13 +129,19 @@ export const KanbanBoard = ({ boardId, onSummaryChange, onDeleted }: KanbanBoard
   };
 
   const handleDeleteBoard = async () => {
-    if (!window.confirm(`Delete the board "${savedNameRef.current}" and all its cards?`)) {
+    const question = isOwner
+      ? `Delete the board "${savedNameRef.current}" and all its cards?`
+      : `Leave the board "${savedNameRef.current}"?`;
+    if (!window.confirm(question)) {
       return;
     }
     try {
-      await api(`/api/boards/${boardId}`, "DELETE");
+      await api(
+        isOwner ? `/api/boards/${boardId}` : `/api/boards/${boardId}/members/${userId}`,
+        "DELETE"
+      );
     } catch {
-      setError("Could not delete the board.");
+      setError(isOwner ? "Could not delete the board." : "Could not leave the board.");
       return;
     }
     onDeleted?.();
@@ -222,8 +250,9 @@ export const KanbanBoard = ({ boardId, onSummaryChange, onDeleted }: KanbanBoard
     });
   };
 
-  const handleChatBoard = (next: BoardData) => {
+  const handleChatBoard = (next: BoardData, version: number) => {
     persistedRef.current = next;
+    versionRef.current = version;
     setBoard(next);
     setError("");
     onSummaryChange?.({ cardCount: Object.keys(next.cards).length });
@@ -254,7 +283,7 @@ export const KanbanBoard = ({ boardId, onSummaryChange, onDeleted }: KanbanBoard
               onBlur={() => void handleNameCommit()}
               aria-label="Board name"
               maxLength={80}
-              disabled={chatPending}
+              disabled={chatPending || !isOwner}
               className="w-full bg-transparent font-display text-3xl font-semibold text-[var(--navy-dark)] outline-none"
             />
             <p className="mt-2 text-sm text-[var(--gray-text)]" data-testid="board-stats">
@@ -270,9 +299,10 @@ export const KanbanBoard = ({ boardId, onSummaryChange, onDeleted }: KanbanBoard
             disabled={chatPending}
             className={ghostButton}
           >
-            Delete board
+            {isOwner ? "Delete board" : "Leave board"}
           </button>
         </div>
+        <MembersPanel boardId={boardId} owner={owner} isOwner={isOwner} />
         <div className="flex flex-wrap items-center gap-3" role="search">
           <input
             value={filter.text}
@@ -389,6 +419,7 @@ export const KanbanBoard = ({ boardId, onSummaryChange, onDeleted }: KanbanBoard
         <ChatSidebar
           boardId={boardId}
           onBoard={handleChatBoard}
+          onConflict={reloadAfterConflict}
           pending={chatPending}
           onPendingChange={setChatPending}
         />

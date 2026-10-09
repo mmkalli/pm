@@ -281,3 +281,27 @@ Success: pytest passes with coverage above 95% for `backend/app`.
 - [x] Vitest for each view; update Playwright specs and add multi-board, register, and admin flows; update `frontend/AGENTS.md`
 
 Success: vitest, lint, and Playwright pass against the container.
+
+## Part 13: Board sharing and edit conflicts
+
+Decisions:
+
+- A board has one owner and any number of members. Members can read and edit the board data and use its chat. Only the owner renames the board, deletes it, and adds or removes members. A member can leave a board. Anyone else gets `404`; a member doing an owner action gets `403`.
+- Each board has an integer `version`, starting at 1 and incremented on every data save (manual or AI). `PUT /api/boards/{id}/data?version=N` returns `409` when `N` is not the current version and writes nothing. Without `version` the write is unconditional.
+- Schema `user_version` 2: `boards.version` column and a `board_members` table. A version 1 database is upgraded on startup.
+- The frontend remembers the last opened board in `localStorage`.
+
+| Method | Path | Auth | Body | Success |
+| --- | --- | --- | --- | --- |
+| GET | `/api/boards` | yes | | summaries plus `owner`, `role` (`owner` or `member`) |
+| GET | `/api/boards/{id}` | owner or member | | record plus `version`, `owner`, `role` |
+| PUT | `/api/boards/{id}/data?version=N` | owner or member | `BoardData` | `{ "data", "version" }`; `409` on a stale version |
+| POST | `/api/boards/{id}/chat` | owner or member | | `{ "reply", "board", "version" }` |
+| GET | `/api/boards/{id}/members` | owner or member | | `[{ "id", "username" }]` |
+| POST | `/api/boards/{id}/members` | owner | `{ "username" }` | `201`, member; unknown user `404`, owner or existing member `409` |
+| DELETE | `/api/boards/{id}/members/{userId}` | owner, or the member themself | | `204` |
+
+- [x] Backend: schema v2 and upgrade, access rules, members routes, version check; pytest
+- [x] Frontend: shared boards in the sidebar, members panel, leave board, conflict reload, last board memory; vitest
+- [x] Playwright: share a board, the member edits it, a stale save gets the conflict message
+- [x] Update docs

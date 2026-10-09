@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Workspace } from "@/components/Workspace";
 import type { User } from "@/lib/api";
@@ -13,10 +13,12 @@ const boardData = (title: string): BoardData => ({
   cards: {},
 });
 
-const summary = (id: number, name: string, cardCount = 0) => ({
+const summary = (id: number, name: string, cardCount = 0, owner = "user") => ({
   id,
   name,
   cardCount,
+  owner,
+  role: owner === "user" ? ("owner" as const) : ("member" as const),
   createdAt: "",
   updatedAt: "",
 });
@@ -37,11 +39,11 @@ const setup = (
     const match = path.match(/^\/api\/boards\/(\d+)$/);
     if (match && method === "GET") {
       const found = boards.find((board) => board.id === Number(match[1]));
-      return found ? { body: { ...found, data: boardData(`${found.name} column`) } } : undefined;
+      return found ? { body: { ...found, version: 1, data: boardData(`${found.name} column`) } } : undefined;
     }
     if (match && method === "DELETE") return { status: 204 };
     if (match && method === "PATCH") return { body: {} };
-    if (path === "/api/users") return { body: [] };
+    if (path === "/api/users" || path.endsWith("/members")) return { body: [] };
     return undefined;
   });
   const onLogout = vi.fn();
@@ -147,5 +149,36 @@ describe("Workspace", () => {
     const { onLogout } = setup();
     await userEvent.click(await screen.findByRole("button", { name: /log out/i }));
     expect(onLogout).toHaveBeenCalled();
+  });
+
+  it("lists shared boards separately with their owner", async () => {
+    setup(admin, { boards: [summary(1, "Roadmap", 3), summary(4, "Team plan", 2, "alice")] });
+    await screen.findByDisplayValue("Roadmap column");
+    const shared = screen.getByRole("list", { name: "Shared boards" });
+    expect(within(shared).getByRole("button")).toHaveTextContent("Team planby alice2");
+    expect(within(boardList()).getAllByRole("button")).toHaveLength(1);
+  });
+
+  it("reopens the last selected board", async () => {
+    setup();
+    await screen.findByDisplayValue("Roadmap column");
+    await userEvent.click(within(boardList()).getByRole("button", { name: /hiring/i }));
+    expect(localStorage.getItem("pm:lastBoard")).toBe("2");
+    cleanup();
+    setup();
+    expect(await screen.findByDisplayValue("Hiring column")).toBeInTheDocument();
+  });
+
+  it("opens the first board when storage is unavailable", async () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    setup();
+    expect(await screen.findByDisplayValue("Roadmap column")).toBeInTheDocument();
+    await userEvent.click(within(boardList()).getByRole("button", { name: /hiring/i }));
+    expect(await screen.findByDisplayValue("Hiring column")).toBeInTheDocument();
   });
 });
