@@ -41,32 +41,27 @@ def chat(board: dict, history: list[dict], message: str) -> tuple[str, object]:
             "response_format": {"type": "json_object"},
         }
     ).encode()
-    payload: dict = {}
+    request = urllib.request.Request(
+        URL,
+        data=body,
+        headers={
+            "Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
     for attempt in range(3):
         if attempt:
             time.sleep(RETRY_DELAY)
-        request = urllib.request.Request(
-            URL,
-            data=body,
-            headers={
-                "Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
         try:
             with urllib.request.urlopen(request, timeout=180) as response:
                 payload = json.load(response)
         except urllib.error.HTTPError as error:
-            payload = {"error": {"message": f"OpenRouter HTTP {error.code}"}}
+            payload = {"error": f"OpenRouter HTTP {error.code}"}
         if "choices" in payload:
             break
-    if "choices" not in payload:
-        error = payload.get("error", {})
-        detail = "OpenRouter error"
-        if isinstance(error, dict):
-            detail = error.get("message", detail)
-        raise RuntimeError(detail)
+    else:
+        raise RuntimeError(payload.get("error", "OpenRouter error"))
     content = payload["choices"][0]["message"]["content"].strip()
     if content.startswith("```"):
         content = content.split("\n", 1)[1].removesuffix("```").strip()

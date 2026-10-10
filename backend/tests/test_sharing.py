@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from app.board import INITIAL_BOARD
 from app.main import app
 from conftest import first_board_id, login, register
-from test_ai import FakeResponse, completion
+from test_ai import FakeResponse, completion, fake_model
 
 
 @pytest.fixture
@@ -122,13 +122,7 @@ def test_chat_on_shared_board_by_member(shared, monkeypatch):
     owner, alice, board_id, _ = shared
     updated = copy.deepcopy(INITIAL_BOARD)
     updated["columns"][0]["title"] = "From AI"
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
-    monkeypatch.setattr(
-        "app.ai.urllib.request.urlopen",
-        lambda request, timeout=None: FakeResponse(
-            completion(json.dumps({"reply": "Done", "board": updated}))
-        ),
-    )
+    fake_model(monkeypatch, {"reply": "Done", "board": updated})
     response = alice.post(f"/api/boards/{board_id}/chat", json={"message": "Go", "history": []})
     assert response.json() == {"reply": "Done", "board": updated, "version": 2}
     assert owner.get(f"/api/boards/{board_id}").json()["data"] == updated

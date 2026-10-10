@@ -14,6 +14,9 @@ const priorityClass: Record<Priority, string> = {
 const fieldClass =
   "w-full rounded-xl border border-[var(--stroke)] px-3 py-2 text-sm text-[var(--navy-dark)] outline-none";
 
+const actionButton =
+  "rounded-full border border-transparent px-2 py-1 text-xs font-semibold text-[var(--gray-text)] transition hover:border-[var(--stroke)] hover:text-[var(--navy-dark)]";
+
 export const CardMeta = ({ card, today }: { card: Card; today: string }) => {
   const labels = card.labels ?? [];
   if (!card.priority && !card.dueDate && labels.length === 0) {
@@ -63,11 +66,11 @@ type KanbanCardProps = {
 
 export const KanbanCard = ({ card, today, onDelete, onEdit, locked }: KanbanCardProps) => {
   const [editing, setEditing] = useState(false);
-  const [title, setTitle] = useState(card.title);
-  const [details, setDetails] = useState(card.details);
-  const [priority, setPriority] = useState<Priority | "">(card.priority ?? "");
-  const [dueDate, setDueDate] = useState(card.dueDate ?? "");
-  const [labels, setLabels] = useState((card.labels ?? []).join(", "));
+  const [title, setTitle] = useState("");
+  const [details, setDetails] = useState("");
+  const [priority, setPriority] = useState<Priority | "">("");
+  const [dueDate, setDueDate] = useState("");
+  const [labels, setLabels] = useState("");
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: card.id, disabled: editing || locked });
 
@@ -190,7 +193,7 @@ export const KanbanCard = ({ card, today, onDelete, onEdit, locked }: KanbanCard
               type="button"
               onClick={startEditing}
               disabled={locked}
-              className="rounded-full border border-transparent px-2 py-1 text-xs font-semibold text-[var(--gray-text)] transition hover:border-[var(--stroke)] hover:text-[var(--navy-dark)]"
+              className={actionButton}
               aria-label={`Edit ${card.title}`}
             >
               Edit
@@ -199,7 +202,7 @@ export const KanbanCard = ({ card, today, onDelete, onEdit, locked }: KanbanCard
               type="button"
               onClick={() => onDelete(card.id)}
               disabled={locked}
-              className="rounded-full border border-transparent px-2 py-1 text-xs font-semibold text-[var(--gray-text)] transition hover:border-[var(--stroke)] hover:text-[var(--navy-dark)]"
+              className={actionButton}
               aria-label={`Delete ${card.title}`}
             >
               Remove

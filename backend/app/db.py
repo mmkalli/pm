@@ -282,13 +282,16 @@ def list_members(board_id: int) -> list[dict]:
             """,
             (board_id,),
         ).fetchall()
-    return [{"id": row["id"], "username": row["username"]} for row in rows]
+    return [dict(row) for row in rows]
 
 
-def find_user_id(username: str) -> int | None:
+def find_user(username: str) -> dict | None:
+    """The id and stored username, or None when there is no such user."""
     with closing(connect()) as conn:
-        row = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
-    return row["id"] if row else None
+        row = conn.execute(
+            "SELECT id, username FROM users WHERE username = ?", (username,)
+        ).fetchone()
+    return dict(row) if row else None
 
 
 def add_member(board_id: int, user_id: int) -> bool:

@@ -238,12 +238,12 @@ def members(board_id: int, user: CurrentUser) -> list[dict]:
 @app.post("/api/boards/{board_id}/members", status_code=201)
 def add_member(board_id: int, body: MemberBody, user: CurrentUser) -> dict:
     board_for(user, board_id, owner=True)
-    member_id = db.find_user_id(body.username)
-    if member_id is None:
+    member = db.find_user(body.username)
+    if member is None:
         raise HTTPException(status_code=404, detail="No user with that name")
-    if member_id == user["id"] or not db.add_member(board_id, member_id):
+    if member["id"] == user["id"] or not db.add_member(board_id, member["id"]):
         raise HTTPException(status_code=409, detail="That user already has this board")
-    return {"id": member_id, "username": db.get_user(member_id)["username"]}
+    return member
 
 
 @app.delete("/api/boards/{board_id}/members/{member_id}", status_code=204)
@@ -251,7 +251,6 @@ def remove_member(board_id: int, member_id: int, user: CurrentUser) -> None:
     board_for(user, board_id, owner=member_id != user["id"])
     if not db.remove_member(board_id, member_id):
         raise HTTPException(status_code=404)
-
 
 
 # Admin
@@ -274,9 +273,10 @@ def create_user(body: NewUserBody, _admin: AdminUser) -> dict:
 def update_user(user_id: int, body: UserUpdateBody, admin: AdminUser) -> dict:
     if user_id == admin["id"] and body.isAdmin is False:
         raise HTTPException(status_code=400, detail="You cannot remove your own admin role")
-    if db.get_user(user_id) is None:
+    user = db.update_user(user_id, body.password, body.isAdmin)
+    if user is None:
         raise HTTPException(status_code=404)
-    return db.update_user(user_id, body.password, body.isAdmin)
+    return user
 
 
 @app.delete("/api/users/{user_id}", status_code=204)

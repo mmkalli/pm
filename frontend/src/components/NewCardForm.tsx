@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { inputClass } from "@/components/ui";
 
 const initialFormState = { title: "", details: "" };
 
@@ -31,7 +32,7 @@ export const NewCardForm = ({ onAdd, locked }: NewCardFormProps) => {
               setFormState((prev) => ({ ...prev, title: event.target.value }))
             }
             placeholder="Card title"
-            className="w-full rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
+            className={inputClass}
             required
           />
           <textarea

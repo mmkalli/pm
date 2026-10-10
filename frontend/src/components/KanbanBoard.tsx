@@ -86,6 +86,13 @@ export const KanbanBoard = ({ boardId, userId, onSummaryChange, onDeleted }: Kan
     setReloads((count) => count + 1);
   };
 
+  const markSaved = (next: BoardData, version: number) => {
+    persistedRef.current = next;
+    versionRef.current = version;
+    setError("");
+    onSummaryChange?.({ cardCount: Object.keys(next.cards).length });
+  };
+
   const save = async (next: BoardData) => {
     const previous = persistedRef.current;
     setBoard(next);
@@ -97,16 +104,11 @@ export const KanbanBoard = ({ boardId, userId, onSummaryChange, onDeleted }: Kan
         reloadAfterConflict();
         return;
       }
-      if (previous) {
-        setBoard(previous);
-      }
+      setBoard(previous);
       setError("Could not save the board.");
       return;
     }
-    persistedRef.current = next;
-    versionRef.current = saved.version;
-    setError("");
-    onSummaryChange?.({ cardCount: Object.keys(next.cards).length });
+    markSaved(next, saved.version);
   };
 
   const handleNameCommit = async () => {
@@ -151,18 +153,6 @@ export const KanbanBoard = ({ boardId, userId, onSummaryChange, onDeleted }: Kan
     setActiveCardId(event.active.id as string);
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveCardId(null);
-    if (!board || !over || active.id === over.id) {
-      return;
-    }
-    void save({
-      ...board,
-      columns: moveCard(board.columns, active.id as string, over.id as string),
-    });
-  };
-
   const handleRenameColumn = (columnId: string, title: string) => {
     setBoard((prev) =>
       prev
@@ -176,13 +166,34 @@ export const KanbanBoard = ({ boardId, userId, onSummaryChange, onDeleted }: Kan
     );
   };
 
-  const handleRenameCommit = (columnId: string, title: string) => {
-    const persisted = persistedRef.current;
-    if (!board || !persisted) {
+  const handleChatBoard = (next: BoardData, version: number) => {
+    setBoard(next);
+    markSaved(next, version);
+  };
+
+  if (!board) {
+    return error ? (
+      <p className={errorClass} role="alert">
+        {error}
+      </p>
+    ) : null;
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveCardId(null);
+    if (!over || active.id === over.id) {
       return;
     }
+    void save({
+      ...board,
+      columns: moveCard(board.columns, active.id as string, over.id as string),
+    });
+  };
+
+  const handleRenameCommit = (columnId: string, title: string) => {
     const trimmed = title.trim();
-    const saved = persisted.columns.find((column) => column.id === columnId)?.title;
+    const saved = persistedRef.current?.columns.find((column) => column.id === columnId)?.title;
     if (!trimmed || trimmed === saved) {
       handleRenameColumn(columnId, saved ?? title);
       return;
@@ -198,7 +209,7 @@ export const KanbanBoard = ({ boardId, userId, onSummaryChange, onDeleted }: Kan
   const handleAddColumn = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const title = newColumn.trim();
-    if (!board || !title || board.columns.length >= MAX_COLUMNS) {
+    if (!title || board.columns.length >= MAX_COLUMNS) {
       return;
     }
     setNewColumn("");
@@ -206,9 +217,6 @@ export const KanbanBoard = ({ boardId, userId, onSummaryChange, onDeleted }: Kan
   };
 
   const handleAddCard = (columnId: string, title: string, details: string) => {
-    if (!board) {
-      return;
-    }
     const id = createId("card");
     void save({
       ...board,
@@ -223,9 +231,6 @@ export const KanbanBoard = ({ boardId, userId, onSummaryChange, onDeleted }: Kan
   };
 
   const handleDeleteCard = (columnId: string, cardId: string) => {
-    if (!board) {
-      return;
-    }
     void save({
       ...board,
       cards: Object.fromEntries(Object.entries(board.cards).filter(([id]) => id !== cardId)),
@@ -238,9 +243,6 @@ export const KanbanBoard = ({ boardId, userId, onSummaryChange, onDeleted }: Kan
   };
 
   const handleEditCard = (card: Card) => {
-    if (!board) {
-      return;
-    }
     void save({
       ...board,
       cards: {
@@ -249,22 +251,6 @@ export const KanbanBoard = ({ boardId, userId, onSummaryChange, onDeleted }: Kan
       },
     });
   };
-
-  const handleChatBoard = (next: BoardData, version: number) => {
-    persistedRef.current = next;
-    versionRef.current = version;
-    setBoard(next);
-    setError("");
-    onSummaryChange?.({ cardCount: Object.keys(next.cards).length });
-  };
-
-  if (!board) {
-    return error ? (
-      <p className={errorClass} role="alert">
-        {error}
-      </p>
-    ) : null;
-  }
 
   const activeCard = activeCardId ? board.cards[activeCardId] : null;
   const today = todayIso();
